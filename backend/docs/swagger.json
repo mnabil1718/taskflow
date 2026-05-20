@@ -363,6 +363,37 @@
                 }
             }
         },
+        "/notifications/stream": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Opens a long-lived SSE connection that pushes task events for every\nproject the caller is a member of. Event types: task.created,\ntask.updated, task.deleted, task.assigned.\n\nThe response media type is text/event-stream. Each event arrives as\ntwo lines followed by a blank line:\nevent: \u003ctype\u003e\ndata:  \u003cjson-encoded notifier.Event\u003e\n\nA `: ping` comment line is sent every 15 seconds to keep the\nconnection alive through proxies. Native browser EventSource does\nnot support custom headers; clients can either use fetch-based\nstreaming or an EventSource polyfill that allows headers.",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Stream task notifications (Server-Sent Events)",
+                "responses": {
+                    "200": {
+                        "description": "Schema of the JSON payload carried in each event's `data:` line",
+                        "schema": {
+                            "$ref": "#/definitions/notifier.Event"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/projects": {
             "get": {
                 "security": [
@@ -1967,6 +1998,49 @@
                     "example": "Wire up auth middleware (revised)"
                 }
             }
+        },
+        "notifier.Event": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "example": "c303012a-6275-4aa3-adec-ebfb123f4567"
+                },
+                "task": {
+                    "$ref": "#/definitions/model.Task"
+                },
+                "task_id": {
+                    "type": "string",
+                    "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                },
+                "timestamp": {
+                    "type": "string",
+                    "example": "2026-05-20T16:00:00Z"
+                },
+                "type": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/notifier.EventType"
+                        }
+                    ],
+                    "example": "task.created"
+                }
+            }
+        },
+        "notifier.EventType": {
+            "type": "string",
+            "enum": [
+                "task.created",
+                "task.updated",
+                "task.deleted",
+                "task.assigned"
+            ],
+            "x-enum-varnames": [
+                "EventTaskCreated",
+                "EventTaskUpdated",
+                "EventTaskDeleted",
+                "EventTaskAssigned"
+            ]
         },
         "response.Body": {
             "type": "object",

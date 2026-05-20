@@ -25,14 +25,21 @@ func NewNotificationHandler(hub *notifier.Hub) *NotificationHandler {
 // @Summary      Stream task notifications (Server-Sent Events)
 // @Description  Opens a long-lived SSE connection that pushes task events for every
 // @Description  project the caller is a member of. Event types: task.created,
-// @Description  task.updated, task.deleted, task.assigned. A heartbeat comment line
-// @Description  is sent every 15 seconds to keep the connection alive through proxies.
-// @Description  The response media type is text/event-stream and each event has the
-// @Description  shape: event: <type>\ndata: <json>\n\n.
+// @Description  task.updated, task.deleted, task.assigned.
+// @Description
+// @Description  The response media type is text/event-stream. Each event arrives as
+// @Description  two lines followed by a blank line:
+// @Description    event: <type>
+// @Description    data:  <json-encoded notifier.Event>
+// @Description
+// @Description  A `: ping` comment line is sent every 15 seconds to keep the
+// @Description  connection alive through proxies. Native browser EventSource does
+// @Description  not support custom headers; clients can either use fetch-based
+// @Description  streaming or an EventSource polyfill that allows headers.
 // @Tags         notifications
 // @Produce      text/event-stream
-// @Success      200 {string} string "SSE stream of notifier.Event payloads"
-// @Failure      401 {object} response.Body "Missing or invalid token"
+// @Success      200 {object} notifier.Event "Schema of the JSON payload carried in each event's `data:` line"
+// @Failure      401 {object} response.Body  "Missing or invalid token"
 // @Security     BearerAuth
 // @Router       /notifications/stream [get]
 func (h *NotificationHandler) Stream(c *fiber.Ctx) error {
