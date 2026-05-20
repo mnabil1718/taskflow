@@ -1,7 +1,11 @@
 package bootstrap
 
 import (
+	"log"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -24,5 +28,17 @@ func NewServer() *Server {
 }
 
 func (s *Server) Run() error {
-	return s.app.Listen(":" + s.port)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if err := s.app.Listen(":" + s.port); err != nil {
+			log.Printf("server error: %v", err)
+		}
+	}()
+
+	<-quit
+	log.Println("shutting down server...")
+
+	return s.app.ShutdownWithTimeout(10 * time.Second)
 }
