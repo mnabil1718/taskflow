@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/viper"
@@ -42,7 +43,7 @@ func Load() (*Config, error) {
 	v.SetConfigType("dotenv")
 	if err := v.ReadInConfig(); err != nil {
 		var configFileNotFoundError viper.ConfigFileNotFoundError
-		if !errors.As(err, &configFileNotFoundError) {
+		if !errors.As(err, &configFileNotFoundError) && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("malformed .env file: %w", err)
 		}
 	}
