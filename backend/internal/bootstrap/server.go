@@ -36,5 +36,11 @@ func (s *Server) Run() error {
 	<-quit
 	slog.Info("shutting down server...")
 
+	if err := s.app.ShutdownWithTimeout(10 * time.Second); err != nil {
+		slog.Warn("shutdown timeout exceeded, forcing exit", "error", err)
+	} else {
+		slog.Info("server shutdown complete")
+	}
+
 	return s.app.ShutdownWithTimeout(10 * time.Second)
 }
