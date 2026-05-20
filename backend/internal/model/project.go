@@ -35,19 +35,19 @@ type ProjectMember struct {
 }
 
 type CreateProjectRequest struct {
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Deadline    *time.Time `json:"deadline"`
+	Name        string     `json:"name"        example:"Q4 Roadmap"`
+	Description string     `json:"description" example:"All tasks for Q4 planning"`
+	Deadline    *time.Time `json:"deadline"    example:"2026-12-31T23:59:59Z"`
 }
 
 type UpdateProjectRequest struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Status      ProjectStatus `json:"status"`
-	Deadline    *time.Time    `json:"deadline"`
+	Name        string        `json:"name"        example:"Q4 Roadmap (revised)"`
+	Description string        `json:"description" example:"Updated scope for Q4"`
+	Status      ProjectStatus `json:"status"      example:"archived"`
+	Deadline    *time.Time    `json:"deadline"    example:"2026-12-31T23:59:59Z"`
 }
 
 type AddMemberRequest struct {
-	UserID string      `json:"user_id"`
-	Role   ProjectRole `json:"role"`
+	UserID string      `json:"user_id" example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
+	Role   ProjectRole `json:"role"    example:"member"`
 }

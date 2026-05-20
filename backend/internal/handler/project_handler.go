@@ -18,14 +18,28 @@ func NewProjectHandler(svc service.ProjectService) *ProjectHandler {
 	return &ProjectHandler{svc: svc}
 }
 
-type paginatedResponse struct {
+// ProjectPage is the paginated envelope returned by the list endpoint.
+type ProjectPage struct {
 	Items      any `json:"items"`
-	Total      int `json:"total"`
-	Page       int `json:"page"`
-	Limit      int `json:"limit"`
-	TotalPages int `json:"total_pages"`
+	Total      int `json:"total"      example:"42"`
+	Page       int `json:"page"       example:"1"`
+	Limit      int `json:"limit"      example:"10"`
+	TotalPages int `json:"total_pages" example:"5"`
 }
 
+// Create godoc
+// @Summary      Create a new project
+// @Description  Creates a project and automatically makes the caller the owner and first member.
+// @Tags         projects
+// @Accept       json
+// @Produce      json
+// @Param        request body     model.CreateProjectRequest                   true "Project payload"
+// @Success      201     {object} response.Body{data=model.Project}            "Project created"
+// @Failure      400     {object} response.Body                                "Validation error or malformed body"
+// @Failure      401     {object} response.Body                                "Missing or invalid token"
+// @Failure      500     {object} response.Body                                "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects [post]
 func (h *ProjectHandler) Create(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -42,17 +56,18 @@ func (h *ProjectHandler) Create(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusCreated, "project created", project)
 }
 
-func (h *ProjectHandler) GetByID(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(string)
-
-	project, err := h.svc.GetByID(c.Context(), userID, c.Params("id"))
-	if err != nil {
-		return h.handleServiceError(c, err)
-	}
-
-	return response.Success(c, fiber.StatusOK, "project retrieved", project)
-}
-
+// List godoc
+// @Summary      List projects
+// @Description  Returns a paginated list of projects the caller owns or is a member of.
+// @Tags         projects
+// @Produce      json
+// @Param        page  query    int                                          false "Page number (default 1)"
+// @Param        limit query    int                                          false "Items per page, max 100 (default 10)"
+// @Success      200   {object} response.Body{data=handler.ProjectPage}     "Projects retrieved"
+// @Failure      401   {object} response.Body                               "Missing or invalid token"
+// @Failure      500   {object} response.Body                               "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects [get]
 func (h *ProjectHandler) List(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -75,7 +90,7 @@ func (h *ProjectHandler) List(c *fiber.Ctx) error {
 		totalPages++
 	}
 
-	return response.Success(c, fiber.StatusOK, "projects retrieved", paginatedResponse{
+	return response.Success(c, fiber.StatusOK, "projects retrieved", ProjectPage{
 		Items:      projects,
 		Total:      total,
 		Page:       page,
@@ -84,6 +99,46 @@ func (h *ProjectHandler) List(c *fiber.Ctx) error {
 	})
 }
 
+// GetByID godoc
+// @Summary      Get a project
+// @Description  Returns a single project by ID. Only accessible to project members.
+// @Tags         projects
+// @Produce      json
+// @Param        id  path     string                                   true "Project UUID"
+// @Success      200 {object} response.Body{data=model.Project}        "Project retrieved"
+// @Failure      401 {object} response.Body                            "Missing or invalid token"
+// @Failure      404 {object} response.Body                            "Project not found or caller is not a member"
+// @Failure      500 {object} response.Body                            "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id} [get]
+func (h *ProjectHandler) GetByID(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	project, err := h.svc.GetByID(c.Context(), userID, c.Params("id"))
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "project retrieved", project)
+}
+
+// Update godoc
+// @Summary      Update a project
+// @Description  Replaces name, description, status, and deadline. Only the owner can update.
+// @Description  Status must be "active" or "archived".
+// @Tags         projects
+// @Accept       json
+// @Produce      json
+// @Param        id      path     string                                    true "Project UUID"
+// @Param        request body     model.UpdateProjectRequest                true "Updated project fields"
+// @Success      200     {object} response.Body{data=model.Project}         "Project updated"
+// @Failure      400     {object} response.Body                             "Validation error or malformed body"
+// @Failure      401     {object} response.Body                             "Missing or invalid token"
+// @Failure      403     {object} response.Body                             "Caller is not the project owner"
+// @Failure      404     {object} response.Body                             "Project not found"
+// @Failure      500     {object} response.Body                             "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id} [put]
 func (h *ProjectHandler) Update(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -100,6 +155,19 @@ func (h *ProjectHandler) Update(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "project updated", project)
 }
 
+// Delete godoc
+// @Summary      Delete a project
+// @Description  Permanently deletes a project and all its tasks. Only the owner can delete.
+// @Tags         projects
+// @Produce      json
+// @Param        id  path     string       true "Project UUID"
+// @Success      200 {object} response.Body "Project deleted"
+// @Failure      401 {object} response.Body "Missing or invalid token"
+// @Failure      403 {object} response.Body "Caller is not the project owner"
+// @Failure      404 {object} response.Body "Project not found"
+// @Failure      500 {object} response.Body "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id} [delete]
 func (h *ProjectHandler) Delete(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -110,6 +178,24 @@ func (h *ProjectHandler) Delete(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "project deleted", nil)
 }
 
+// AddMember godoc
+// @Summary      Add a member to a project
+// @Description  Adds a registered user to the project with the given role. Only the owner can add members.
+// @Description  Valid roles are "admin" and "member". Defaults to "member" if omitted.
+// @Tags         projects
+// @Accept       json
+// @Produce      json
+// @Param        id      path     string                                          true "Project UUID"
+// @Param        request body     model.AddMemberRequest                          true "Member payload"
+// @Success      201     {object} response.Body{data=model.ProjectMember}         "Member added"
+// @Failure      400     {object} response.Body                                   "Validation error — missing user_id or invalid role"
+// @Failure      401     {object} response.Body                                   "Missing or invalid token"
+// @Failure      403     {object} response.Body                                   "Caller is not the project owner"
+// @Failure      404     {object} response.Body                                   "Project or user not found"
+// @Failure      409     {object} response.Body                                   "User is already a member"
+// @Failure      500     {object} response.Body                                   "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id}/members [post]
 func (h *ProjectHandler) AddMember(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -126,6 +212,22 @@ func (h *ProjectHandler) AddMember(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusCreated, "member added", member)
 }
 
+// RemoveMember godoc
+// @Summary      Remove a member from a project
+// @Description  Removes the specified user from the project. Only the owner can remove members.
+// @Description  The owner cannot remove themselves.
+// @Tags         projects
+// @Produce      json
+// @Param        id     path     string       true "Project UUID"
+// @Param        userID path     string       true "UUID of the user to remove"
+// @Success      200    {object} response.Body "Member removed"
+// @Failure      400    {object} response.Body "Owner cannot remove themselves"
+// @Failure      401    {object} response.Body "Missing or invalid token"
+// @Failure      403    {object} response.Body "Caller is not the project owner"
+// @Failure      404    {object} response.Body "Project or member not found"
+// @Failure      500    {object} response.Body "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id}/members/{userID} [delete]
 func (h *ProjectHandler) RemoveMember(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -136,6 +238,18 @@ func (h *ProjectHandler) RemoveMember(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "member removed", nil)
 }
 
+// GetMembers godoc
+// @Summary      List project members
+// @Description  Returns all members of the project. Accessible to any project member.
+// @Tags         projects
+// @Produce      json
+// @Param        id  path     string                                              true "Project UUID"
+// @Success      200 {object} response.Body{data=[]model.ProjectMember}           "Members retrieved"
+// @Failure      401 {object} response.Body                                       "Missing or invalid token"
+// @Failure      404 {object} response.Body                                       "Project not found or caller is not a member"
+// @Failure      500 {object} response.Body                                       "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id}/members [get]
 func (h *ProjectHandler) GetMembers(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
