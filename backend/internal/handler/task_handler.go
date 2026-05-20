@@ -18,14 +18,32 @@ func NewTaskHandler(svc service.TaskService) *TaskHandler {
 	return &TaskHandler{svc: svc}
 }
 
+// TaskPage is the paginated envelope returned by the list endpoint.
 type TaskPage struct {
 	Items      any `json:"items"`
-	Total      int `json:"total"`
-	Page       int `json:"page"`
-	Limit      int `json:"limit"`
-	TotalPages int `json:"total_pages"`
+	Total      int `json:"total"       example:"42"`
+	Page       int `json:"page"        example:"1"`
+	Limit      int `json:"limit"       example:"10"`
+	TotalPages int `json:"total_pages" example:"5"`
 }
 
+// Create godoc
+// @Summary      Create a task in a project
+// @Description  Creates a task scoped to a project. The caller must be a project member.
+// @Description  If assignee_id is set, the assignee must also be a project member.
+// @Description  Priority defaults to "medium" when omitted; status is always "todo" on creation.
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        id      path     string                                  true "Project UUID"
+// @Param        request body     model.CreateTaskRequest                 true "Task payload"
+// @Success      201     {object} response.Body{data=model.Task}          "Task created"
+// @Failure      400     {object} response.Body                           "Validation error, invalid priority, or assignee not a project member"
+// @Failure      401     {object} response.Body                           "Missing or invalid token"
+// @Failure      404     {object} response.Body                           "Project not found or caller is not a member"
+// @Failure      500     {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id}/tasks [post]
 func (h *TaskHandler) Create(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -42,6 +60,27 @@ func (h *TaskHandler) Create(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusCreated, "task created", task)
 }
 
+// List godoc
+// @Summary      List tasks in a project
+// @Description  Returns a paginated list of tasks in the project. The caller must be a project member.
+// @Description  Supports filtering by status, priority, and assignee, and sorting by a whitelisted column.
+// @Tags         tasks
+// @Produce      json
+// @Param        id           path     string                                  true  "Project UUID"
+// @Param        status       query    string                                  false "Filter by status: todo, in_progress, done"
+// @Param        priority     query    string                                  false "Filter by priority: low, medium, high"
+// @Param        assignee_id  query    string                                  false "Filter by assignee UUID"
+// @Param        sort_by      query    string                                  false "Sort column: status, priority, assignee_id, due_date, updated_at, title, created_at (default created_at)"
+// @Param        sort_order   query    string                                  false "Sort direction: asc or desc (default desc)"
+// @Param        page         query    int                                     false "Page number (default 1)"
+// @Param        limit        query    int                                     false "Items per page, max 100 (default 10)"
+// @Success      200          {object} response.Body{data=handler.TaskPage}    "Tasks retrieved"
+// @Failure      400          {object} response.Body                           "Invalid filter value"
+// @Failure      401          {object} response.Body                           "Missing or invalid token"
+// @Failure      404          {object} response.Body                           "Project not found or caller is not a member"
+// @Failure      500          {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id}/tasks [get]
 func (h *TaskHandler) List(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -83,6 +122,18 @@ func (h *TaskHandler) List(c *fiber.Ctx) error {
 	})
 }
 
+// GetByID godoc
+// @Summary      Get a task
+// @Description  Returns a single task by ID. The caller must be a member of the task's project.
+// @Tags         tasks
+// @Produce      json
+// @Param        taskID path     string                          true "Task UUID"
+// @Success      200    {object} response.Body{data=model.Task}  "Task retrieved"
+// @Failure      401    {object} response.Body                   "Missing or invalid token"
+// @Failure      404    {object} response.Body                   "Task not found or caller is not a project member"
+// @Failure      500    {object} response.Body                   "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/{taskID} [get]
 func (h *TaskHandler) GetByID(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -94,6 +145,23 @@ func (h *TaskHandler) GetByID(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "task retrieved", task)
 }
 
+// Update godoc
+// @Summary      Update a task
+// @Description  Replaces title, description, status, priority, assignee, and due_date.
+// @Description  The caller must be a project member. If assignee_id is set, the assignee must also be a project member.
+// @Description  A status change is recorded automatically in the task activity log.
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        taskID  path     string                                  true "Task UUID"
+// @Param        request body     model.UpdateTaskRequest                 true "Updated task fields"
+// @Success      200     {object} response.Body{data=model.Task}          "Task updated"
+// @Failure      400     {object} response.Body                           "Validation error, invalid enum, or assignee not a project member"
+// @Failure      401     {object} response.Body                           "Missing or invalid token"
+// @Failure      404     {object} response.Body                           "Task not found or caller is not a project member"
+// @Failure      500     {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/{taskID} [put]
 func (h *TaskHandler) Update(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -110,6 +178,19 @@ func (h *TaskHandler) Update(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "task updated", task)
 }
 
+// Delete godoc
+// @Summary      Delete a task
+// @Description  Permanently deletes a task. Only the project owner or the task creator can delete.
+// @Tags         tasks
+// @Produce      json
+// @Param        taskID path     string       true "Task UUID"
+// @Success      200    {object} response.Body "Task deleted"
+// @Failure      401    {object} response.Body "Missing or invalid token"
+// @Failure      403    {object} response.Body "Caller is not the project owner or task creator"
+// @Failure      404    {object} response.Body "Task not found or caller is not a project member"
+// @Failure      500    {object} response.Body "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/{taskID} [delete]
 func (h *TaskHandler) Delete(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -120,6 +201,22 @@ func (h *TaskHandler) Delete(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "task deleted", nil)
 }
 
+// Assign godoc
+// @Summary      Assign or unassign a task
+// @Description  Updates only the assignee of a task. The caller must be a project member.
+// @Description  Set assignee_id to a project member UUID to assign, or to null to unassign.
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        taskID  path     string                                  true "Task UUID"
+// @Param        request body     model.AssignTaskRequest                 true "Assignee payload (null to unassign)"
+// @Success      200     {object} response.Body{data=model.Task}          "Task assignee updated"
+// @Failure      400     {object} response.Body                           "Malformed body or assignee not a project member"
+// @Failure      401     {object} response.Body                           "Missing or invalid token"
+// @Failure      404     {object} response.Body                           "Task not found or caller is not a project member"
+// @Failure      500     {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/{taskID}/assign [patch]
 func (h *TaskHandler) Assign(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
@@ -136,6 +233,19 @@ func (h *TaskHandler) Assign(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "task assignee updated", task)
 }
 
+// GetActivityLogs godoc
+// @Summary      List a task's status-change history
+// @Description  Returns the task's status-transition log in reverse chronological order.
+// @Description  The caller must be a member of the task's project.
+// @Tags         tasks
+// @Produce      json
+// @Param        taskID path     string                                          true "Task UUID"
+// @Success      200    {object} response.Body{data=[]model.TaskActivityLog}     "Activity logs retrieved"
+// @Failure      401    {object} response.Body                                   "Missing or invalid token"
+// @Failure      404    {object} response.Body                                   "Task not found or caller is not a project member"
+// @Failure      500    {object} response.Body                                   "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/{taskID}/activity [get]
 func (h *TaskHandler) GetActivityLogs(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
