@@ -15,7 +15,7 @@ import (
 	"github.com/mnabil1718/taskflow/internal/service"
 )
 
-func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler) *fiber.App {
+func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ReadBufferSize: 16 * 1024,
 	})
@@ -35,7 +35,7 @@ func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.Hea
 		},
 	}))
 
-	registerRoutes(app, authSvc, health, auth, project)
+	registerRoutes(app, authSvc, health, auth, project, task)
 	return app
 }
 
@@ -52,7 +52,7 @@ func rateLimiter(max int, expiration time.Duration) fiber.Handler {
 	})
 }
 
-func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler) {
+func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler) {
 	app.Get("/health", health.Check)
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
@@ -77,4 +77,13 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 	projects.Get("/:id/members", project.GetMembers)
 	projects.Post("/:id/members", project.AddMember)
 	projects.Delete("/:id/members/:userID", project.RemoveMember)
+
+	projects.Post("/:id/tasks", task.Create)
+	projects.Get("/:id/tasks", task.List)
+
+	tasks := protected.Group("/tasks")
+	tasks.Get("/:taskID", task.GetByID)
+	tasks.Put("/:taskID", task.Update)
+	tasks.Delete("/:taskID", task.Delete)
+	tasks.Get("/:taskID/activity", task.GetActivityLogs)
 }
