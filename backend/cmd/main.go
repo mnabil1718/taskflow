@@ -7,6 +7,7 @@ import (
 	"github.com/mnabil1718/taskflow/internal/config"
 	"github.com/mnabil1718/taskflow/internal/database"
 	"github.com/mnabil1718/taskflow/internal/logger"
+	"github.com/mnabil1718/taskflow/internal/seeder"
 )
 
 func main() {
@@ -25,9 +26,16 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := database.RunMigrations(db, cfg.App.MigrationsPath); err != nil {
+	if err := database.RunMigrations(cfg, cfg.App.MigrationsPath); err != nil {
 		slog.Error("failed to run migrations", "error", err)
 		os.Exit(1)
+	}
+
+	if cfg.App.Env == "development" {
+		if err := seeder.Run(db); err != nil {
+			slog.Error("failed to seed database", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	server := initServer(cfg, db)
