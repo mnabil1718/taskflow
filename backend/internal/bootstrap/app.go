@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/swagger"
 	"github.com/mnabil1718/taskflow/internal/config"
 	"github.com/mnabil1718/taskflow/internal/handler"
 	"github.com/mnabil1718/taskflow/internal/response"
@@ -27,7 +28,8 @@ func NewApp(cfg *config.Config, health *handler.HealthHandler, auth *handler.Aut
 	app.Use(logger.New(logger.Config{
 		Format: "${time} | ${status} | ${latency} | ${method} ${path}\n",
 		Next: func(c *fiber.Ctx) bool {
-			return c.Path() == "/health"
+			p := c.Path()
+			return p == "/health" || len(p) >= 9 && p[:9] == "/swagger/"
 		},
 	}))
 
@@ -50,6 +52,7 @@ func rateLimiter(max int, expiration time.Duration) fiber.Handler {
 
 func registerRoutes(app *fiber.App, health *handler.HealthHandler, auth *handler.AuthHandler) {
 	app.Get("/health", health.Check)
+	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	// 100 requests/min per IP for all API routes
 	v1 := app.Group("/api/v1", rateLimiter(100, time.Minute))

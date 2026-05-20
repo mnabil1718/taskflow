@@ -1,0 +1,227 @@
+basePath: /api/v1
+definitions:
+  github_com_mnabil1718_taskflow_internal_model.LoginRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+      password:
+        example: password123
+        type: string
+    type: object
+  github_com_mnabil1718_taskflow_internal_model.RefreshRequest:
+    properties:
+      refresh_token:
+        example: k9F2pQ7sR1tU4vWxYz0AbCdEfGhIjKlMnOpQrStUvWx=
+        type: string
+    type: object
+  github_com_mnabil1718_taskflow_internal_model.RegisterRequest:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+      name:
+        example: Alice
+        type: string
+      password:
+        example: password123
+        type: string
+    type: object
+  github_com_mnabil1718_taskflow_internal_model.TokenPair:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYzMwMzAxMmEtNjI3NS00YWEzLWFkZWMtZWJmYjEyM2Y0NTY3IiwiZW1haWwiOiJhbGljZUBleGFtcGxlLmNvbSIsImV4cCI6MTczMzc4NzIwMH0.signature
+        type: string
+      refresh_token:
+        example: k9F2pQ7sR1tU4vWxYz0AbCdEfGhIjKlMnOpQrStUvWx=
+        type: string
+    type: object
+  github_com_mnabil1718_taskflow_internal_response.Body:
+    properties:
+      data:
+        type: object
+      error:
+        example: 'validation error: password must be at least 8 characters'
+        type: string
+      message:
+        example: operation successful
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: TaskFlow Maintainers
+    url: https://github.com/mnabil1718/taskflow
+  description: |-
+    Task management REST API with JWT authentication.
+    All responses follow the shape { data, message, error }.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: TaskFlow API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user and returns an access/refresh token pair.
+      parameters:
+      - description: Login payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_model.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_model.TokenPair'
+              type: object
+        "400":
+          description: Missing fields or malformed JSON body
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "401":
+          description: Invalid email or password
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+      summary: Log in with email and password
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Invalidates the supplied refresh token. Idempotent: returns 200
+        even if the token does not exist.
+      parameters:
+      - description: Refresh token to invalidate
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_model.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logged out successfully
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "400":
+          description: Missing refresh_token or malformed JSON body
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+      summary: Log out the current session
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Rotates the refresh token: the supplied token is deleted and a
+        new access/refresh pair is issued.
+      parameters:
+      - description: Current refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_model.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refreshed
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_model.TokenPair'
+              type: object
+        "400":
+          description: Missing refresh_token or malformed JSON body
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+      summary: Exchange a refresh token for a new token pair
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Creates a new user account and returns an access/refresh token pair.
+        Validation rules: name >= 2 chars, valid email, password >= 8 chars.
+      parameters:
+      - description: Registration payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_model.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Registration successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_model.TokenPair'
+              type: object
+        "400":
+          description: Validation error or malformed JSON body
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "409":
+          description: Email already registered
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_mnabil1718_taskflow_internal_response.Body'
+      summary: Register a new user
+      tags:
+      - auth
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and the JWT access token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
