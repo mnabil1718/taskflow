@@ -2,10 +2,9 @@ package main
 
 import (
 	"log"
-	"os"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
+	"github.com/mnabil1718/taskflow/internal/bootstrap"
 )
 
 func main() {
@@ -13,18 +12,6 @@ func main() {
 		log.Println("no .env file found, reading from environment")
 	}
 
-	app := fiber.New(fiber.Config{
-		ReadBufferSize: 16 * 1024,
-	})
-
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok"})
-	})
-
-	port := os.Getenv("APP_PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Fatal(app.Listen(":" + port))
+	server := bootstrap.NewServer()
+	log.Fatal(server.Run())
 }
