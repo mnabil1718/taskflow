@@ -139,15 +139,17 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 		return nil, 0, fmt.Errorf("count tasks: %w", err)
 	}
 
+	sortCol, sortDir := taskSortClause(filter.SortBy, filter.SortOrder)
+
 	listArgs := append([]any{}, args...)
 	listArgs = append(listArgs, limit, offset)
 	listQuery := fmt.Sprintf(`
 		SELECT id, title, description, status, priority, project_id, assignee_id, created_by, due_date, created_at, updated_at
 		FROM tasks
 		WHERE %s
-		ORDER BY created_at DESC
+		ORDER BY %s %s NULLS LAST, created_at DESC
 		LIMIT $%d OFFSET $%d
-	`, where, idx, idx+1)
+	`, where, sortCol, sortDir, idx, idx+1)
 
 	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
 	if err != nil {
@@ -297,6 +299,32 @@ func (r *taskRepository) GetActivityLogs(ctx context.Context, taskID string) ([]
 	}
 
 	return logs, rows.Err()
+}
+
+func taskSortClause(sortBy, sortOrder string) (string, string) {
+	col := "created_at"
+	switch strings.ToLower(sortBy) {
+	case "status":
+		col = "status"
+	case "priority":
+		col = "priority"
+	case "assignee", "assignee_id":
+		col = "assignee_id"
+	case "due_date":
+		col = "due_date"
+	case "updated_at":
+		col = "updated_at"
+	case "title":
+		col = "title"
+	case "created_at", "":
+		col = "created_at"
+	}
+
+	dir := "DESC"
+	if strings.EqualFold(sortOrder, "asc") {
+		dir = "ASC"
+	}
+	return col, dir
 }
 
 func nullableUUID(s *string) sql.NullString {

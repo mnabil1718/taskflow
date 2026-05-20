@@ -58,6 +58,8 @@ func (h *TaskHandler) List(c *fiber.Ctx) error {
 		Status:     model.TaskStatus(c.Query("status")),
 		Priority:   model.TaskPriority(c.Query("priority")),
 		AssigneeID: c.Query("assignee_id"),
+		SortBy:     c.Query("sort_by"),
+		SortOrder:  c.Query("sort_order"),
 		Page:       page,
 		Limit:      limit,
 	}
