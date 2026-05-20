@@ -13,7 +13,9 @@ func main() {
 		log.Println("no .env file found, reading from environment")
 	}
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		ReadBufferSize: 16 * 1024,
+	})
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
