@@ -23,6 +23,7 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 		repository.NewTaskRepository,
 		repository.NewDashboardRepository,
 		notifier.NewHub,
+		notifier.NewDeadlineScheduler,
 		service.NewAuthService,
 		service.NewProjectService,
 		service.NewTaskService,

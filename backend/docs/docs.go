@@ -372,7 +372,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Opens a long-lived SSE connection that pushes task events for every\nproject the caller is a member of. Event types: task.created,\ntask.updated, task.deleted, task.assigned.\n\nThe response media type is text/event-stream. Each event arrives as\ntwo lines followed by a blank line:\nevent: \u003ctype\u003e\ndata:  \u003cjson-encoded notifier.Event\u003e\n\nA ` + "`" + `: ping` + "`" + ` comment line is sent every 15 seconds to keep the\nconnection alive through proxies. Native browser EventSource does\nnot support custom headers; clients can either use fetch-based\nstreaming or an EventSource polyfill that allows headers.",
+                "description": "Opens a long-lived SSE connection that pushes task events to the\ncaller. The set of events the caller receives depends on the event\ntype — see \"Routing\" below.\n\nEvent types:\n- task.created           — a new task was created in a project the caller is a member of\n- task.updated           — a task in such a project was updated\n- task.deleted           — a task in such a project was deleted\n- task.assigned          — a task's assignee was changed (assign or unassign)\n- task.deadline_reminder — the caller is the assignee of an open task whose due_date is approaching\n\nRouting:\n- task.created / updated / deleted / assigned are fanned out to **every member** of the affected project (team feed).\n- task.deadline_reminder is sent **only to the assignee** of the task.\n\nDeadline reminders fire in two windows per task: when the deadline\nis within 3 days, and again when it is within 1 day. The\n` + "`" + `reminder_window` + "`" + ` field on the event payload is \"3d\" or \"1d\"\naccordingly. Each window fires at most once per (task, window) pair;\nchanging the task's due_date or assignee resets the windows so the\nnew schedule / new assignee gets fresh warnings. Done tasks and\nunassigned tasks never receive reminders.\n\nWire format: text/event-stream. Each event arrives as two lines\nfollowed by a blank line:\nevent: \u003ctype\u003e\ndata:  \u003cjson-encoded notifier.Event\u003e\n\nA ` + "`" + `: ping` + "`" + ` comment line is sent every 15 seconds to keep the\nconnection alive through proxies. Native browser EventSource does\nnot support custom headers; clients can either use fetch-based\nstreaming or an EventSource polyfill that allows headers.",
                 "produces": [
                     "text/event-stream"
                 ],
@@ -382,7 +382,7 @@ const docTemplate = `{
                 "summary": "Stream task notifications (Server-Sent Events)",
                 "responses": {
                     "200": {
-                        "description": "Schema of the JSON payload carried in each event's ` + "`" + `data:` + "`" + ` line",
+                        "description": "Schema of the JSON payload carried in each event's ` + "`" + `data:` + "`" + ` line. ` + "`" + `reminder_window` + "`" + ` is present only on task.deadline_reminder events.",
                         "schema": {
                             "$ref": "#/definitions/notifier.Event"
                         }
@@ -2008,6 +2008,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "c303012a-6275-4aa3-adec-ebfb123f4567"
                 },
+                "reminder_window": {
+                    "type": "string",
+                    "example": "3d"
+                },
                 "task": {
                     "$ref": "#/definitions/model.Task"
                 },
@@ -2035,13 +2039,15 @@ const docTemplate = `{
                 "task.created",
                 "task.updated",
                 "task.deleted",
-                "task.assigned"
+                "task.assigned",
+                "task.deadline_reminder"
             ],
             "x-enum-varnames": [
                 "EventTaskCreated",
                 "EventTaskUpdated",
                 "EventTaskDeleted",
-                "EventTaskAssigned"
+                "EventTaskAssigned",
+                "EventTaskDeadlineReminder"
             ]
         },
         "response.Body": {

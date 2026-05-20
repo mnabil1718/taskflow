@@ -10,18 +10,20 @@ import (
 type EventType string
 
 const (
-	EventTaskCreated  EventType = "task.created"
-	EventTaskUpdated  EventType = "task.updated"
-	EventTaskDeleted  EventType = "task.deleted"
-	EventTaskAssigned EventType = "task.assigned"
+	EventTaskCreated          EventType = "task.created"
+	EventTaskUpdated          EventType = "task.updated"
+	EventTaskDeleted          EventType = "task.deleted"
+	EventTaskAssigned         EventType = "task.assigned"
+	EventTaskDeadlineReminder EventType = "task.deadline_reminder"
 )
 
 type Event struct {
-	Type      EventType   `json:"type"       example:"task.created"`
-	TaskID    string      `json:"task_id"    example:"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
-	ProjectID string      `json:"project_id" example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
-	Task      *model.Task `json:"task,omitempty"`
-	Timestamp time.Time   `json:"timestamp"  example:"2026-05-20T16:00:00Z"`
+	Type           EventType   `json:"type"                     example:"task.created"`
+	TaskID         string      `json:"task_id"                  example:"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
+	ProjectID      string      `json:"project_id"               example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
+	Task           *model.Task `json:"task,omitempty"`
+	ReminderWindow string      `json:"reminder_window,omitempty" example:"3d"`
+	Timestamp      time.Time   `json:"timestamp"                example:"2026-05-20T16:00:00Z"`
 }
 
 type Subscription struct {

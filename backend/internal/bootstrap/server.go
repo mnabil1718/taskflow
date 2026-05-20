@@ -9,23 +9,29 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mnabil1718/taskflow/internal/config"
+	"github.com/mnabil1718/taskflow/internal/notifier"
 )
 
 type Server struct {
-	app  *fiber.App
-	port string
+	app       *fiber.App
+	port      string
+	scheduler *notifier.DeadlineScheduler
 }
 
-func NewServer(cfg *config.Config, app *fiber.App) *Server {
+func NewServer(cfg *config.Config, app *fiber.App, scheduler *notifier.DeadlineScheduler) *Server {
 	return &Server{
-		app:  app,
-		port: cfg.App.Port,
+		app:       app,
+		port:      cfg.App.Port,
+		scheduler: scheduler,
 	}
 }
 
 func (s *Server) Run() error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	s.scheduler.Start()
+	slog.Info("deadline reminder scheduler started")
 
 	go func() {
 		if err := s.app.Listen(":" + s.port); err != nil {
@@ -35,6 +41,8 @@ func (s *Server) Run() error {
 
 	<-quit
 	slog.Info("shutting down server...")
+
+	s.scheduler.Stop()
 
 	if err := s.app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		slog.Warn("shutdown timeout exceeded, forcing exit", "error", err)
