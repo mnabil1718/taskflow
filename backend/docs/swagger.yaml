@@ -339,6 +339,9 @@ definitions:
       project_id:
         example: c303012a-6275-4aa3-adec-ebfb123f4567
         type: string
+      reminder_window:
+        example: 3d
+        type: string
       task:
         $ref: '#/definitions/model.Task'
       task_id:
@@ -358,12 +361,14 @@ definitions:
     - task.updated
     - task.deleted
     - task.assigned
+    - task.deadline_reminder
     type: string
     x-enum-varnames:
     - EventTaskCreated
     - EventTaskUpdated
     - EventTaskDeleted
     - EventTaskAssigned
+    - EventTaskDeadlineReminder
   response.Body:
     properties:
       data:
@@ -611,12 +616,31 @@ paths:
   /notifications/stream:
     get:
       description: |-
-        Opens a long-lived SSE connection that pushes task events for every
-        project the caller is a member of. Event types: task.created,
-        task.updated, task.deleted, task.assigned.
+        Opens a long-lived SSE connection that pushes task events to the
+        caller. The set of events the caller receives depends on the event
+        type — see "Routing" below.
 
-        The response media type is text/event-stream. Each event arrives as
-        two lines followed by a blank line:
+        Event types:
+        - task.created           — a new task was created in a project the caller is a member of
+        - task.updated           — a task in such a project was updated
+        - task.deleted           — a task in such a project was deleted
+        - task.assigned          — a task's assignee was changed (assign or unassign)
+        - task.deadline_reminder — the caller is the assignee of an open task whose due_date is approaching
+
+        Routing:
+        - task.created / updated / deleted / assigned are fanned out to **every member** of the affected project (team feed).
+        - task.deadline_reminder is sent **only to the assignee** of the task.
+
+        Deadline reminders fire in two windows per task: when the deadline
+        is within 3 days, and again when it is within 1 day. The
+        `reminder_window` field on the event payload is "3d" or "1d"
+        accordingly. Each window fires at most once per (task, window) pair;
+        changing the task's due_date or assignee resets the windows so the
+        new schedule / new assignee gets fresh warnings. Done tasks and
+        unassigned tasks never receive reminders.
+
+        Wire format: text/event-stream. Each event arrives as two lines
+        followed by a blank line:
         event: <type>
         data:  <json-encoded notifier.Event>
 
@@ -629,7 +653,7 @@ paths:
       responses:
         "200":
           description: Schema of the JSON payload carried in each event's `data:`
-            line
+            line. `reminder_window` is present only on task.deadline_reminder events.
           schema:
             $ref: '#/definitions/notifier.Event'
         "401":

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/mnabil1718/taskflow/internal/model"
 	"github.com/mnabil1718/taskflow/internal/notifier"
@@ -189,6 +190,7 @@ func (s *taskService) Update(ctx context.Context, userID, taskID string, req *mo
 	}
 
 	prevStatus := t.Status
+	prevDue := t.DueDate
 
 	t.Title = req.Title
 	t.Description = req.Description
@@ -206,6 +208,12 @@ func (s *taskService) Update(ctx context.Context, userID, taskID string, req *mo
 		if err := s.taskRepo.LogStatusChange(ctx, t.ID, &changedBy, prevStatus, t.Status); err != nil {
 			return nil, err
 		}
+	}
+
+	// A new due_date invalidates any reminder that was already fired against
+	// the old schedule — let the scheduler send fresh ones.
+	if !sameDueDate(prevDue, t.DueDate) {
+		_ = s.taskRepo.ClearReminders(ctx, t.ID)
 	}
 
 	s.notify(ctx, t.ProjectID, notifier.Event{
@@ -285,6 +293,8 @@ func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *mo
 		}
 	}
 
+	prevAssignee := t.AssigneeID
+
 	if err := s.taskRepo.UpdateAssignee(ctx, taskID, assignee); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, ErrTaskNotFound
@@ -293,6 +303,12 @@ func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *mo
 	}
 
 	t.AssigneeID = assignee
+
+	// Assignment change means the new assignee hasn't been warned about the
+	// deadline yet — reset the per-task reminder flags so they fire again.
+	if !sameAssignee(prevAssignee, t.AssigneeID) {
+		_ = s.taskRepo.ClearReminders(ctx, t.ID)
+	}
 
 	s.notify(ctx, t.ProjectID, notifier.Event{
 		Type:      notifier.EventTaskAssigned,
@@ -375,4 +391,26 @@ func normalizeUUIDPtr(s *string) *string {
 	}
 	v := *s
 	return &v
+}
+
+func sameDueDate(a, b *time.Time) bool {
+	switch {
+	case a == nil && b == nil:
+		return true
+	case a == nil || b == nil:
+		return false
+	default:
+		return a.Equal(*b)
+	}
+}
+
+func sameAssignee(a, b *string) bool {
+	switch {
+	case a == nil && b == nil:
+		return true
+	case a == nil || b == nil:
+		return false
+	default:
+		return *a == *b
+	}
 }

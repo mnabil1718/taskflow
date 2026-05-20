@@ -11,6 +11,15 @@ import (
 	"github.com/mnabil1718/taskflow/internal/model"
 )
 
+// ReminderKind is a whitelisted identifier for a deadline-reminder window.
+// The repository maps it to the corresponding reminder_*_sent_at column.
+type ReminderKind string
+
+const (
+	ReminderThreeDay ReminderKind = "3d"
+	ReminderOneDay   ReminderKind = "1d"
+)
+
 type TaskRepository interface {
 	Create(ctx context.Context, t *model.Task) error
 	GetByID(ctx context.Context, id string) (*model.Task, error)
@@ -20,6 +29,10 @@ type TaskRepository interface {
 	Delete(ctx context.Context, id string) error
 	LogStatusChange(ctx context.Context, taskID string, changedBy *string, from, to model.TaskStatus) error
 	GetActivityLogs(ctx context.Context, taskID string) ([]*model.TaskActivityLog, error)
+
+	PendingReminders(ctx context.Context, kind ReminderKind) ([]*model.Task, error)
+	MarkReminderSent(ctx context.Context, taskID string, kind ReminderKind) error
+	ClearReminders(ctx context.Context, taskID string) error
 }
 
 type taskRepository struct {
@@ -299,6 +312,106 @@ func (r *taskRepository) GetActivityLogs(ctx context.Context, taskID string) ([]
 	}
 
 	return logs, rows.Err()
+}
+
+func (r *taskRepository) PendingReminders(ctx context.Context, kind ReminderKind) ([]*model.Task, error) {
+	col, interval, err := reminderColumn(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, title, description, status, priority, project_id, assignee_id, created_by, due_date, created_at, updated_at
+		FROM tasks
+		WHERE assignee_id IS NOT NULL
+		  AND status != 'done'
+		  AND due_date IS NOT NULL
+		  AND due_date > NOW()
+		  AND due_date <= NOW() + INTERVAL '%s'
+		  AND %s IS NULL
+		ORDER BY due_date ASC
+	`, interval, col)
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("pending reminders: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := make([]*model.Task, 0)
+	for rows.Next() {
+		t := &model.Task{}
+		var desc sql.NullString
+		var assignee, creator sql.NullString
+		var dueDate sql.NullTime
+		if err := rows.Scan(
+			&t.ID,
+			&t.Title,
+			&desc,
+			&t.Status,
+			&t.Priority,
+			&t.ProjectID,
+			&assignee,
+			&creator,
+			&dueDate,
+			&t.CreatedAt,
+			&t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan pending reminder: %w", err)
+		}
+		if desc.Valid {
+			t.Description = desc.String
+		}
+		if assignee.Valid {
+			t.AssigneeID = &assignee.String
+		}
+		if creator.Valid {
+			t.CreatedBy = &creator.String
+		}
+		if dueDate.Valid {
+			t.DueDate = &dueDate.Time
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+func (r *taskRepository) MarkReminderSent(ctx context.Context, taskID string, kind ReminderKind) error {
+	col, _, err := reminderColumn(kind)
+	if err != nil {
+		return err
+	}
+	query := fmt.Sprintf(`UPDATE tasks SET %s = NOW() WHERE id = $1`, col)
+	if _, err := r.db.ExecContext(ctx, query, taskID); err != nil {
+		return fmt.Errorf("mark reminder sent: %w", err)
+	}
+	return nil
+}
+
+func (r *taskRepository) ClearReminders(ctx context.Context, taskID string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET reminder_3d_sent_at = NULL, reminder_1d_sent_at = NULL
+		WHERE id = $1
+	`, taskID)
+	if err != nil {
+		return fmt.Errorf("clear reminders: %w", err)
+	}
+	return nil
+}
+
+// reminderColumn maps a ReminderKind to its column and the INTERVAL window
+// it covers. Returning the interval as a literal string is safe because
+// kind is whitelisted by the switch — no caller input ever reaches the SQL.
+func reminderColumn(kind ReminderKind) (string, string, error) {
+	switch kind {
+	case ReminderThreeDay:
+		return "reminder_3d_sent_at", "3 days", nil
+	case ReminderOneDay:
+		return "reminder_1d_sent_at", "1 day", nil
+	default:
+		return "", "", fmt.Errorf("unknown reminder kind: %q", kind)
+	}
 }
 
 func taskSortClause(sortBy, sortOrder string) (string, string) {
