@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/mnabil1718/taskflow/internal/bootstrap"
 	"github.com/mnabil1718/taskflow/internal/config"
 	"github.com/mnabil1718/taskflow/internal/logger"
 )
@@ -18,7 +17,8 @@ func main() {
 
 	logger.Init(cfg.App.Env)
 
-	server := bootstrap.NewServer(cfg)
+	server := initServer(cfg)
+
 	if err := server.Run(); err != nil {
 		slog.Error("server exited with error", "error", err)
 		os.Exit(1)

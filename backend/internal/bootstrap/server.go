@@ -16,9 +16,9 @@ type Server struct {
 	port string
 }
 
-func NewServer(cfg *config.Config) *Server {
+func NewServer(cfg *config.Config, app *fiber.App) *Server {
 	return &Server{
-		app:  newApp(),
+		app:  app,
 		port: cfg.App.Port,
 	}
 }
