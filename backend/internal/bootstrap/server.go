@@ -1,7 +1,7 @@
 package bootstrap
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,12 +29,12 @@ func (s *Server) Run() error {
 
 	go func() {
 		if err := s.app.Listen(":" + s.port); err != nil {
-			log.Printf("server error: %v", err)
+			slog.Error("server error", "error", err)
 		}
 	}()
 
 	<-quit
-	log.Println("shutting down server...")
+	slog.Info("shutting down server...")
 
 	return s.app.ShutdownWithTimeout(10 * time.Second)
 }

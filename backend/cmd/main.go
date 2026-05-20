@@ -1,18 +1,26 @@
 package main
 
 import (
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/mnabil1718/taskflow/internal/bootstrap"
 	"github.com/mnabil1718/taskflow/internal/config"
+	"github.com/mnabil1718/taskflow/internal/logger"
 )
 
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config error: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 
+	logger.Init(cfg.App.Env)
+
 	server := bootstrap.NewServer(cfg)
-	log.Fatal(server.Run())
+	if err := server.Run(); err != nil {
+		slog.Error("server exited with error", "error", err)
+		os.Exit(1)
+	}
 }
