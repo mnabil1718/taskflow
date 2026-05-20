@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/mnabil1718/taskflow/internal/config"
@@ -37,13 +39,20 @@ func NewDB(cfg *config.Config) (*sql.DB, error) {
 	return db, nil
 }
 
-func RunMigrations(db *sql.DB, migrationsPath string) error {
-	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
-	if err != nil {
-		return fmt.Errorf("create migration driver: %w", err)
+// RunMigrations uses its own connection so closing the migrator does not
+// affect the application's *sql.DB pool.
+func RunMigrations(cfg *config.Config, migrationsPath string) error {
+	u := &url.URL{
+		Scheme: "pgx5",
+		User:   url.UserPassword(cfg.DB.User, cfg.DB.Password),
+		Host:   cfg.DB.Host + ":" + strconv.Itoa(cfg.DB.Port),
+		Path:   "/" + cfg.DB.Name,
 	}
+	q := url.Values{}
+	q.Set("sslmode", cfg.DB.SSLMode)
+	u.RawQuery = q.Encode()
 
-	m, err := migrate.NewWithDatabaseInstance("file://"+migrationsPath, "pgx5", driver)
+	m, err := migrate.New("file://"+migrationsPath, u.String())
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}
