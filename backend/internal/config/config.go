@@ -16,8 +16,9 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Port string
-	Env  string
+	Port           string
+	Env            string
+	MigrationsPath string
 }
 
 type DBConfig struct {
@@ -52,6 +53,7 @@ func Load() (*Config, error) {
 
 	v.SetDefault("APP_PORT", "8080")
 	v.SetDefault("APP_ENV", "development")
+	v.SetDefault("MIGRATIONS_PATH", "migrations")
 	v.SetDefault("DB_HOST", "localhost")
 	v.SetDefault("DB_PORT", 5432)
 	v.SetDefault("DB_USER", "taskflow")
@@ -62,8 +64,9 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		App: AppConfig{
-			Port: v.GetString("APP_PORT"),
-			Env:  v.GetString("APP_ENV"),
+			Port:           v.GetString("APP_PORT"),
+			Env:            v.GetString("APP_ENV"),
+			MigrationsPath: v.GetString("MIGRATIONS_PATH"),
 		},
 		DB: DBConfig{
 			Host:     v.GetString("DB_HOST"),

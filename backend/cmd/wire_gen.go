@@ -7,6 +7,7 @@
 package main
 
 import (
+	"database/sql"
 	"github.com/mnabil1718/taskflow/internal/bootstrap"
 	"github.com/mnabil1718/taskflow/internal/config"
 	"github.com/mnabil1718/taskflow/internal/handler"
@@ -14,7 +15,7 @@ import (
 
 // Injectors from wire.go:
 
-func initServer(cfg *config.Config) *bootstrap.Server {
+func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 	healthHandler := handler.NewHealthHandler()
 	app := bootstrap.NewApp(healthHandler)
 	server := bootstrap.NewServer(cfg, app)
