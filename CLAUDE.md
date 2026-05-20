@@ -111,4 +111,4 @@ Rules:
 
 ## Current phase
 
-PHASE 1: Project Scaffold & CLAUDE.md
+Backend: Go + Gin. DB Schema -> migrations -> auth -> project/task APIs -> tests
