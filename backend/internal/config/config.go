@@ -16,9 +16,10 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Port           string
-	Env            string
-	MigrationsPath string
+	Port            string
+	Env             string
+	MigrationsPath  string
+	CORSAllowOrigins string
 }
 
 type DBConfig struct {
@@ -54,6 +55,7 @@ func Load() (*Config, error) {
 	v.SetDefault("APP_PORT", "8080")
 	v.SetDefault("APP_ENV", "development")
 	v.SetDefault("MIGRATIONS_PATH", "migrations")
+	v.SetDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 	v.SetDefault("DB_HOST", "localhost")
 	v.SetDefault("DB_PORT", 5432)
 	v.SetDefault("DB_USER", "taskflow")
@@ -64,9 +66,10 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		App: AppConfig{
-			Port:           v.GetString("APP_PORT"),
-			Env:            v.GetString("APP_ENV"),
-			MigrationsPath: v.GetString("MIGRATIONS_PATH"),
+			Port:             v.GetString("APP_PORT"),
+			Env:              v.GetString("APP_ENV"),
+			MigrationsPath:   v.GetString("MIGRATIONS_PATH"),
+			CORSAllowOrigins: v.GetString("CORS_ALLOWED_ORIGINS"),
 		},
 		DB: DBConfig{
 			Host:     v.GetString("DB_HOST"),

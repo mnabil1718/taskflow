@@ -23,7 +23,7 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 	tokenRepository := repository.NewTokenRepository(db)
 	authService := service.NewAuthService(userRepository, tokenRepository, cfg)
 	authHandler := handler.NewAuthHandler(authService)
-	app := bootstrap.NewApp(healthHandler, authHandler)
+	app := bootstrap.NewApp(cfg, healthHandler, authHandler)
 	server := bootstrap.NewServer(cfg, app)
 	return server
 }

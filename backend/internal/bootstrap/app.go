@@ -4,16 +4,25 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/mnabil1718/taskflow/internal/config"
 	"github.com/mnabil1718/taskflow/internal/handler"
 	"github.com/mnabil1718/taskflow/internal/response"
 )
 
-func NewApp(health *handler.HealthHandler, auth *handler.AuthHandler) *fiber.App {
+func NewApp(cfg *config.Config, health *handler.HealthHandler, auth *handler.AuthHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ReadBufferSize: 16 * 1024,
 	})
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     cfg.App.CORSAllowOrigins,
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Authorization",
+		AllowCredentials: true,
+	}))
 
 	app.Use(logger.New(logger.Config{
 		Format: "${time} | ${status} | ${latency} | ${method} ${path}\n",
