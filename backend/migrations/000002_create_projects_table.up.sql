@@ -1,10 +1,15 @@
+CREATE TYPE project_status AS ENUM ('active', 'archived');
+
 CREATE TABLE projects (
-    id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name        VARCHAR(255) NOT NULL,
+    id          UUID           PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name        VARCHAR(255)   NOT NULL,
     description TEXT,
-    owner_id    UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    status      project_status NOT NULL DEFAULT 'active',
+    deadline    TIMESTAMPTZ,
+    owner_id    UUID           NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_projects_owner_id ON projects(owner_id);
+CREATE INDEX idx_projects_status   ON projects(status);
