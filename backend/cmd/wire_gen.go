@@ -33,7 +33,10 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 	taskRepository := repository.NewTaskRepository(db)
 	taskService := service.NewTaskService(taskRepository, projectRepository)
 	taskHandler := handler.NewTaskHandler(taskService)
-	app := bootstrap.NewApp(cfg, authService, healthHandler, authHandler, projectHandler, taskHandler)
+	dashboardRepository := repository.NewDashboardRepository(db)
+	dashboardService := service.NewDashboardService(dashboardRepository)
+	dashboardHandler := handler.NewDashboardHandler(dashboardService)
+	app := bootstrap.NewApp(cfg, authService, healthHandler, authHandler, projectHandler, taskHandler, dashboardHandler)
 	server := bootstrap.NewServer(cfg, app)
 	return server
 }

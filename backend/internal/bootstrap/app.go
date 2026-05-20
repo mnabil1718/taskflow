@@ -15,7 +15,7 @@ import (
 	"github.com/mnabil1718/taskflow/internal/service"
 )
 
-func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler) *fiber.App {
+func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ReadBufferSize: 16 * 1024,
 	})
@@ -35,7 +35,7 @@ func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.Hea
 		},
 	}))
 
-	registerRoutes(app, authSvc, health, auth, project, task)
+	registerRoutes(app, authSvc, health, auth, project, task, dashboard)
 	return app
 }
 
@@ -52,7 +52,7 @@ func rateLimiter(max int, expiration time.Duration) fiber.Handler {
 	})
 }
 
-func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler) {
+func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler) {
 	app.Get("/health", health.Check)
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
@@ -87,4 +87,8 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 	tasks.Delete("/:taskID", task.Delete)
 	tasks.Patch("/:taskID/assign", task.Assign)
 	tasks.Get("/:taskID/activity", task.GetActivityLogs)
+
+	dash := protected.Group("/dashboard")
+	dash.Get("/project-task-counts", dashboard.ProjectTaskCounts)
+	dash.Get("/upcoming-tasks", dashboard.UpcomingTasks)
 }
