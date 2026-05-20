@@ -20,6 +20,7 @@ type TaskService interface {
 	List(ctx context.Context, userID, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
 	Update(ctx context.Context, userID, taskID string, req *model.UpdateTaskRequest) (*model.Task, error)
 	Delete(ctx context.Context, userID, taskID string) error
+	Assign(ctx context.Context, userID, taskID string, req *model.AssignTaskRequest) (*model.Task, error)
 	GetActivityLogs(ctx context.Context, userID, taskID string) ([]*model.TaskActivityLog, error)
 }
 
@@ -213,6 +214,45 @@ func (s *taskService) Delete(ctx context.Context, userID, taskID string) error {
 	}
 
 	return s.taskRepo.Delete(ctx, taskID)
+}
+
+func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *model.AssignTaskRequest) (*model.Task, error) {
+	t, err := s.taskRepo.GetByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, err
+	}
+
+	isMember, err := s.projectRepo.IsMember(ctx, t.ProjectID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, ErrTaskNotFound
+	}
+
+	assignee := normalizeUUIDPtr(req.AssigneeID)
+	if assignee != nil {
+		ok, err := s.projectRepo.IsMember(ctx, t.ProjectID, *assignee)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, ErrAssigneeNotMember
+		}
+	}
+
+	if err := s.taskRepo.UpdateAssignee(ctx, taskID, assignee); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, err
+	}
+
+	t.AssigneeID = assignee
+	return t, nil
 }
 
 func (s *taskService) GetActivityLogs(ctx context.Context, userID, taskID string) ([]*model.TaskActivityLog, error) {

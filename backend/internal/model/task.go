@@ -62,3 +62,7 @@ type TaskFilter struct {
 	Page       int
 	Limit      int
 }
+
+type AssignTaskRequest struct {
+	AssigneeID *string `json:"assignee_id"`
+}

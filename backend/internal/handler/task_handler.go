@@ -118,6 +118,22 @@ func (h *TaskHandler) Delete(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "task deleted", nil)
 }
 
+func (h *TaskHandler) Assign(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	var req model.AssignTaskRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	task, err := h.svc.Assign(c.Context(), userID, c.Params("taskID"), &req)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "task assignee updated", task)
+}
+
 func (h *TaskHandler) GetActivityLogs(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 

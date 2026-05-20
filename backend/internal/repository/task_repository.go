@@ -16,6 +16,7 @@ type TaskRepository interface {
 	GetByID(ctx context.Context, id string) (*model.Task, error)
 	List(ctx context.Context, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
 	Update(ctx context.Context, t *model.Task) error
+	UpdateAssignee(ctx context.Context, id string, assigneeID *string) error
 	Delete(ctx context.Context, id string) error
 	LogStatusChange(ctx context.Context, taskID string, changedBy *string, from, to model.TaskStatus) error
 	GetActivityLogs(ctx context.Context, taskID string) ([]*model.TaskActivityLog, error)
@@ -219,6 +220,26 @@ func (r *taskRepository) Update(ctx context.Context, t *model.Task) error {
 			return ErrNotFound
 		}
 		return fmt.Errorf("update task: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *taskRepository) UpdateAssignee(ctx context.Context, id string, assigneeID *string) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET assignee_id = $1, updated_at = NOW()
+		WHERE id = $2
+	`, nullableUUID(assigneeID), id)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return ErrNotFound
+		}
+		return fmt.Errorf("update task assignee: %w", err)
 	}
 	n, _ := result.RowsAffected()
 	if n == 0 {
