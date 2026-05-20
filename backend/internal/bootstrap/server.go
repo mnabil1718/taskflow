@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/mnabil1718/taskflow/internal/config"
 )
 
 type Server struct {
@@ -15,15 +16,10 @@ type Server struct {
 	port string
 }
 
-func NewServer() *Server {
-	port := os.Getenv("APP_PORT")
-	if port == "" {
-		port = "8080"
-	}
-
+func NewServer(cfg *config.Config) *Server {
 	return &Server{
 		app:  newApp(),
-		port: port,
+		port: cfg.App.Port,
 	}
 }
 

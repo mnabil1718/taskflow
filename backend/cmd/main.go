@@ -3,15 +3,16 @@ package main
 import (
 	"log"
 
-	"github.com/joho/godotenv"
 	"github.com/mnabil1718/taskflow/internal/bootstrap"
+	"github.com/mnabil1718/taskflow/internal/config"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("no .env file found, reading from environment")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config error: %v", err)
 	}
 
-	server := bootstrap.NewServer()
+	server := bootstrap.NewServer(cfg)
 	log.Fatal(server.Run())
 }
