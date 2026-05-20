@@ -16,6 +16,22 @@ definitions:
         example: 5
         type: integer
     type: object
+  handler.TaskPage:
+    properties:
+      items: {}
+      limit:
+        example: 10
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 42
+        type: integer
+      total_pages:
+        example: 5
+        type: integer
+    type: object
   model.AddMemberRequest:
     properties:
       role:
@@ -24,6 +40,12 @@ definitions:
         example: member
       user_id:
         example: c303012a-6275-4aa3-adec-ebfb123f4567
+        type: string
+    type: object
+  model.AssignTaskRequest:
+    properties:
+      assignee_id:
+        example: f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd
         type: string
     type: object
   model.CreateProjectRequest:
@@ -36,6 +58,25 @@ definitions:
         type: string
       name:
         example: Q4 Roadmap
+        type: string
+    type: object
+  model.CreateTaskRequest:
+    properties:
+      assignee_id:
+        example: f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd
+        type: string
+      description:
+        example: Plug JWTProtected into the v1 router
+        type: string
+      due_date:
+        example: "2026-06-01T17:00:00Z"
+        type: string
+      priority:
+        allOf:
+        - $ref: '#/definitions/model.TaskPriority'
+        example: high
+      title:
+        example: Wire up auth middleware
         type: string
     type: object
   model.LoginRequest:
@@ -99,6 +140,27 @@ definitions:
     x-enum-varnames:
     - ProjectStatusActive
     - ProjectStatusArchived
+  model.ProjectTaskCounts:
+    properties:
+      done:
+        example: 12
+        type: integer
+      in_progress:
+        example: 3
+        type: integer
+      project_id:
+        example: c303012a-6275-4aa3-adec-ebfb123f4567
+        type: string
+      project_name:
+        example: Q4 Roadmap
+        type: string
+      todo:
+        example: 5
+        type: integer
+      total:
+        example: 20
+        type: integer
+    type: object
   model.RefreshRequest:
     properties:
       refresh_token:
@@ -117,6 +179,87 @@ definitions:
         example: password123
         type: string
     type: object
+  model.Task:
+    properties:
+      assignee_id:
+        example: f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd
+        type: string
+      created_at:
+        example: "2026-05-20T09:15:00Z"
+        type: string
+      created_by:
+        example: 6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f
+        type: string
+      description:
+        example: Plug JWTProtected into the v1 router
+        type: string
+      due_date:
+        example: "2026-06-01T17:00:00Z"
+        type: string
+      id:
+        example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        type: string
+      priority:
+        allOf:
+        - $ref: '#/definitions/model.TaskPriority'
+        example: medium
+      project_id:
+        example: c303012a-6275-4aa3-adec-ebfb123f4567
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/model.TaskStatus'
+        example: todo
+      title:
+        example: Wire up auth middleware
+        type: string
+      updated_at:
+        example: "2026-05-20T09:15:00Z"
+        type: string
+    type: object
+  model.TaskActivityLog:
+    properties:
+      changed_by:
+        example: 6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f
+        type: string
+      created_at:
+        example: "2026-05-20T10:00:00Z"
+        type: string
+      from_status:
+        allOf:
+        - $ref: '#/definitions/model.TaskStatus'
+        example: todo
+      id:
+        example: 5b5a7c2c-1d3e-4d3a-9b8c-aab0cf2d99aa
+        type: string
+      task_id:
+        example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        type: string
+      to_status:
+        allOf:
+        - $ref: '#/definitions/model.TaskStatus'
+        example: in_progress
+    type: object
+  model.TaskPriority:
+    enum:
+    - low
+    - medium
+    - high
+    type: string
+    x-enum-varnames:
+    - TaskPriorityLow
+    - TaskPriorityMedium
+    - TaskPriorityHigh
+  model.TaskStatus:
+    enum:
+    - todo
+    - in_progress
+    - done
+    type: string
+    x-enum-varnames:
+    - TaskStatusTodo
+    - TaskStatusInProgress
+    - TaskStatusDone
   model.TokenPair:
     properties:
       access_token:
@@ -124,6 +267,32 @@ definitions:
         type: string
       refresh_token:
         example: k9F2pQ7sR1tU4vWxYz0AbCdEfGhIjKlMnOpQrStUvWx=
+        type: string
+    type: object
+  model.UpcomingTask:
+    properties:
+      due_date:
+        example: "2026-05-22T17:00:00Z"
+        type: string
+      id:
+        example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        type: string
+      priority:
+        allOf:
+        - $ref: '#/definitions/model.TaskPriority'
+        example: high
+      project_id:
+        example: c303012a-6275-4aa3-adec-ebfb123f4567
+        type: string
+      project_name:
+        example: Q4 Roadmap
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/model.TaskStatus'
+        example: in_progress
+      title:
+        example: Ship release candidate
         type: string
     type: object
   model.UpdateProjectRequest:
@@ -141,6 +310,29 @@ definitions:
         allOf:
         - $ref: '#/definitions/model.ProjectStatus'
         example: archived
+    type: object
+  model.UpdateTaskRequest:
+    properties:
+      assignee_id:
+        example: f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd
+        type: string
+      description:
+        example: Also cover refresh-token flow
+        type: string
+      due_date:
+        example: "2026-06-05T17:00:00Z"
+        type: string
+      priority:
+        allOf:
+        - $ref: '#/definitions/model.TaskPriority'
+        example: high
+      status:
+        allOf:
+        - $ref: '#/definitions/model.TaskStatus'
+        example: in_progress
+      title:
+        example: Wire up auth middleware (revised)
+        type: string
     type: object
   response.Body:
     properties:
@@ -321,6 +513,71 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /dashboard/project-task-counts:
+    get:
+      description: |-
+        Returns a count of tasks grouped by status (todo, in_progress, done) for every
+        project the caller is a member of, plus the total task count per project.
+        Projects with no tasks are still included with zeroed counters.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Project task counts retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/model.ProjectTaskCounts'
+                  type: array
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Per-project task counts
+      tags:
+      - dashboard
+  /dashboard/upcoming-tasks:
+    get:
+      description: |-
+        Returns tasks assigned to the caller whose due_date falls within the next 3 days
+        and whose status is not "done". Ordered by soonest due_date first.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Upcoming tasks retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/model.UpcomingTask'
+                  type: array
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Upcoming tasks assigned to the caller
+      tags:
+      - dashboard
   /projects:
     get:
       description: Returns a paginated list of projects the caller owns or is a member
@@ -677,6 +934,354 @@ paths:
       summary: Remove a member from a project
       tags:
       - projects
+  /projects/{id}/tasks:
+    get:
+      description: |-
+        Returns a paginated list of tasks in the project. The caller must be a project member.
+        Supports filtering by status, priority, and assignee, and sorting by a whitelisted column.
+      parameters:
+      - description: Project UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'Filter by status: todo, in_progress, done'
+        in: query
+        name: status
+        type: string
+      - description: 'Filter by priority: low, medium, high'
+        in: query
+        name: priority
+        type: string
+      - description: Filter by assignee UUID
+        in: query
+        name: assignee_id
+        type: string
+      - description: 'Sort column: status, priority, assignee_id, due_date, updated_at,
+          title, created_at (default created_at)'
+        in: query
+        name: sort_by
+        type: string
+      - description: 'Sort direction: asc or desc (default desc)'
+        in: query
+        name: sort_order
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Items per page, max 100 (default 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tasks retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.TaskPage'
+              type: object
+        "400":
+          description: Invalid filter value
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Project not found or caller is not a member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List tasks in a project
+      tags:
+      - tasks
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Creates a task scoped to a project. The caller must be a project member.
+        If assignee_id is set, the assignee must also be a project member.
+        Priority defaults to "medium" when omitted; status is always "todo" on creation.
+      parameters:
+      - description: Project UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Task payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Task created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Task'
+              type: object
+        "400":
+          description: Validation error, invalid priority, or assignee not a project
+            member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Project not found or caller is not a member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Create a task in a project
+      tags:
+      - tasks
+  /tasks/{taskID}:
+    delete:
+      description: Permanently deletes a task. Only the project owner or the task
+        creator can delete.
+      parameters:
+      - description: Task UUID
+        in: path
+        name: taskID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task deleted
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: Caller is not the project owner or task creator
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Task not found or caller is not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Delete a task
+      tags:
+      - tasks
+    get:
+      description: Returns a single task by ID. The caller must be a member of the
+        task's project.
+      parameters:
+      - description: Task UUID
+        in: path
+        name: taskID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Task'
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Task not found or caller is not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Get a task
+      tags:
+      - tasks
+    put:
+      consumes:
+      - application/json
+      description: |-
+        Replaces title, description, status, priority, assignee, and due_date.
+        The caller must be a project member. If assignee_id is set, the assignee must also be a project member.
+        A status change is recorded automatically in the task activity log.
+      parameters:
+      - description: Task UUID
+        in: path
+        name: taskID
+        required: true
+        type: string
+      - description: Updated task fields
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task updated
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Task'
+              type: object
+        "400":
+          description: Validation error, invalid enum, or assignee not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Task not found or caller is not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Update a task
+      tags:
+      - tasks
+  /tasks/{taskID}/activity:
+    get:
+      description: |-
+        Returns the task's status-transition log in reverse chronological order.
+        The caller must be a member of the task's project.
+      parameters:
+      - description: Task UUID
+        in: path
+        name: taskID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity logs retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/model.TaskActivityLog'
+                  type: array
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Task not found or caller is not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List a task's status-change history
+      tags:
+      - tasks
+  /tasks/{taskID}/assign:
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Updates only the assignee of a task. The caller must be a project member.
+        Set assignee_id to a project member UUID to assign, or to null to unassign.
+      parameters:
+      - description: Task UUID
+        in: path
+        name: taskID
+        required: true
+        type: string
+      - description: Assignee payload (null to unassign)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.AssignTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task assignee updated
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Task'
+              type: object
+        "400":
+          description: Malformed body or assignee not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Task not found or caller is not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Assign or unassign a task
+      tags:
+      - tasks
 schemes:
 - http
 - https
