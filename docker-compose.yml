@@ -16,5 +16,16 @@ services:
       timeout: 5s
       retries: 5
 
+  db-test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: taskflow_test
+      POSTGRES_PASSWORD: taskflow_test
+      POSTGRES_DB: taskflow_test
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
 volumes:
   postgres_data:

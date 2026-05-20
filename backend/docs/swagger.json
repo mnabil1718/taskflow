@@ -1,0 +1,341 @@
+{
+    "schemes": [
+        "http",
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Task management REST API with JWT authentication.\nAll responses follow the shape { data, message, error }.",
+        "title": "TaskFlow API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "TaskFlow Maintainers",
+            "url": "https://github.com/mnabil1718/taskflow"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/auth/login": {
+            "post": {
+                "description": "Authenticates a user and returns an access/refresh token pair.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Log in with email and password",
+                "parameters": [
+                    {
+                        "description": "Login payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_model.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Login successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_model.TokenPair"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Missing fields or malformed JSON body",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid email or password",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "Invalidates the supplied refresh token. Idempotent: returns 200\neven if the token does not exist.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Log out the current session",
+                "parameters": [
+                    {
+                        "description": "Refresh token to invalidate",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_model.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Logged out successfully",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing refresh_token or malformed JSON body",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Rotates the refresh token: the supplied token is deleted and a\nnew access/refresh pair is issued.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Exchange a refresh token for a new token pair",
+                "parameters": [
+                    {
+                        "description": "Current refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_model.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token refreshed",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_model.TokenPair"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Missing refresh_token or malformed JSON body",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or expired refresh token",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register": {
+            "post": {
+                "description": "Creates a new user account and returns an access/refresh token pair.\nValidation rules: name \u003e= 2 chars, valid email, password \u003e= 8 chars.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Register a new user",
+                "parameters": [
+                    {
+                        "description": "Registration payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_model.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Registration successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_model.TokenPair"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or malformed JSON body",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already registered",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mnabil1718_taskflow_internal_response.Body"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "github_com_mnabil1718_taskflow_internal_model.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "alice@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "password123"
+                }
+            }
+        },
+        "github_com_mnabil1718_taskflow_internal_model.RefreshRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "k9F2pQ7sR1tU4vWxYz0AbCdEfGhIjKlMnOpQrStUvWx="
+                }
+            }
+        },
+        "github_com_mnabil1718_taskflow_internal_model.RegisterRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "alice@example.com"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Alice"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "password123"
+                }
+            }
+        },
+        "github_com_mnabil1718_taskflow_internal_model.TokenPair": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYzMwMzAxMmEtNjI3NS00YWEzLWFkZWMtZWJmYjEyM2Y0NTY3IiwiZW1haWwiOiJhbGljZUBleGFtcGxlLmNvbSIsImV4cCI6MTczMzc4NzIwMH0.signature"
+                },
+                "refresh_token": {
+                    "type": "string",
+                    "example": "k9F2pQ7sR1tU4vWxYz0AbCdEfGhIjKlMnOpQrStUvWx="
+                }
+            }
+        },
+        "github_com_mnabil1718_taskflow_internal_response.Body": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "validation error: password must be at least 8 characters"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "operation successful"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and the JWT access token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}
