@@ -15,15 +15,22 @@ import (
 	"github.com/mnabil1718/taskflow/internal/service"
 )
 
+import (
+	_ "github.com/mnabil1718/taskflow/docs"
+)
+
 // Injectors from wire.go:
 
 func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
-	healthHandler := handler.NewHealthHandler()
 	userRepository := repository.NewUserRepository(db)
 	tokenRepository := repository.NewTokenRepository(db)
 	authService := service.NewAuthService(userRepository, tokenRepository, cfg)
+	healthHandler := handler.NewHealthHandler()
 	authHandler := handler.NewAuthHandler(authService)
-	app := bootstrap.NewApp(cfg, healthHandler, authHandler)
+	projectRepository := repository.NewProjectRepository(db)
+	projectService := service.NewProjectService(projectRepository, userRepository)
+	projectHandler := handler.NewProjectHandler(projectService)
+	app := bootstrap.NewApp(cfg, authService, healthHandler, authHandler, projectHandler)
 	server := bootstrap.NewServer(cfg, app)
 	return server
 }

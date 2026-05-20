@@ -18,9 +18,12 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 	wire.Build(
 		repository.NewUserRepository,
 		repository.NewTokenRepository,
+		repository.NewProjectRepository,
 		service.NewAuthService,
+		service.NewProjectService,
 		handler.NewHealthHandler,
 		handler.NewAuthHandler,
+		handler.NewProjectHandler,
 		bootstrap.NewApp,
 		bootstrap.NewServer,
 	)
