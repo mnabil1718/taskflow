@@ -1,0 +1,21 @@
+# Env files — never commit these
+.env
+.env.local
+.env.*.local
+
+# Go
+backend/bin/
+backend/vendor/
+*.exe
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Docker volumes
+postgres_data/
+
+# OS
+.DS_Store
+Thumbs.db
