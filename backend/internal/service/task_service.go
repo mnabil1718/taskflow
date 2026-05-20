@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/mnabil1718/taskflow/internal/model"
+	"github.com/mnabil1718/taskflow/internal/notifier"
 	"github.com/mnabil1718/taskflow/internal/repository"
 )
 
@@ -27,10 +28,26 @@ type TaskService interface {
 type taskService struct {
 	taskRepo    repository.TaskRepository
 	projectRepo repository.ProjectRepository
+	hub         *notifier.Hub
 }
 
-func NewTaskService(taskRepo repository.TaskRepository, projectRepo repository.ProjectRepository) TaskService {
-	return &taskService{taskRepo: taskRepo, projectRepo: projectRepo}
+func NewTaskService(taskRepo repository.TaskRepository, projectRepo repository.ProjectRepository, hub *notifier.Hub) TaskService {
+	return &taskService{taskRepo: taskRepo, projectRepo: projectRepo, hub: hub}
+}
+
+// notify fans out a task event to every member of the task's project.
+// Failures here are swallowed so that a notifier hiccup never breaks a
+// mutation that has already committed.
+func (s *taskService) notify(ctx context.Context, projectID string, ev notifier.Event) {
+	members, err := s.projectRepo.GetMembers(ctx, projectID)
+	if err != nil {
+		return
+	}
+	recipients := make([]string, 0, len(members))
+	for _, m := range members {
+		recipients = append(recipients, m.UserID)
+	}
+	s.hub.Publish(recipients, ev)
 }
 
 func (s *taskService) Create(ctx context.Context, userID, projectID string, req *model.CreateTaskRequest) (*model.Task, error) {
@@ -83,6 +100,13 @@ func (s *taskService) Create(ctx context.Context, userID, projectID string, req 
 	if err := s.taskRepo.Create(ctx, t); err != nil {
 		return nil, err
 	}
+
+	s.notify(ctx, t.ProjectID, notifier.Event{
+		Type:      notifier.EventTaskCreated,
+		TaskID:    t.ID,
+		ProjectID: t.ProjectID,
+		Task:      t,
+	})
 
 	return t, nil
 }
@@ -184,6 +208,13 @@ func (s *taskService) Update(ctx context.Context, userID, taskID string, req *mo
 		}
 	}
 
+	s.notify(ctx, t.ProjectID, notifier.Event{
+		Type:      notifier.EventTaskUpdated,
+		TaskID:    t.ID,
+		ProjectID: t.ProjectID,
+		Task:      t,
+	})
+
 	return t, nil
 }
 
@@ -213,7 +244,17 @@ func (s *taskService) Delete(ctx context.Context, userID, taskID string) error {
 		return ErrForbidden
 	}
 
-	return s.taskRepo.Delete(ctx, taskID)
+	if err := s.taskRepo.Delete(ctx, taskID); err != nil {
+		return err
+	}
+
+	s.notify(ctx, t.ProjectID, notifier.Event{
+		Type:      notifier.EventTaskDeleted,
+		TaskID:    taskID,
+		ProjectID: t.ProjectID,
+	})
+
+	return nil
 }
 
 func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *model.AssignTaskRequest) (*model.Task, error) {
@@ -252,6 +293,14 @@ func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *mo
 	}
 
 	t.AssigneeID = assignee
+
+	s.notify(ctx, t.ProjectID, notifier.Event{
+		Type:      notifier.EventTaskAssigned,
+		TaskID:    t.ID,
+		ProjectID: t.ProjectID,
+		Task:      t,
+	})
+
 	return t, nil
 }
 

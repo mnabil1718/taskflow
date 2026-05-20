@@ -11,6 +11,7 @@ import (
 	"github.com/mnabil1718/taskflow/internal/bootstrap"
 	"github.com/mnabil1718/taskflow/internal/config"
 	"github.com/mnabil1718/taskflow/internal/handler"
+	"github.com/mnabil1718/taskflow/internal/notifier"
 	"github.com/mnabil1718/taskflow/internal/repository"
 	"github.com/mnabil1718/taskflow/internal/service"
 )
@@ -31,12 +32,14 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 	projectService := service.NewProjectService(projectRepository, userRepository)
 	projectHandler := handler.NewProjectHandler(projectService)
 	taskRepository := repository.NewTaskRepository(db)
-	taskService := service.NewTaskService(taskRepository, projectRepository)
+	hub := notifier.NewHub()
+	taskService := service.NewTaskService(taskRepository, projectRepository, hub)
 	taskHandler := handler.NewTaskHandler(taskService)
 	dashboardRepository := repository.NewDashboardRepository(db)
 	dashboardService := service.NewDashboardService(dashboardRepository)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService)
-	app := bootstrap.NewApp(cfg, authService, healthHandler, authHandler, projectHandler, taskHandler, dashboardHandler)
+	notificationHandler := handler.NewNotificationHandler(hub)
+	app := bootstrap.NewApp(cfg, authService, healthHandler, authHandler, projectHandler, taskHandler, dashboardHandler, notificationHandler)
 	server := bootstrap.NewServer(cfg, app)
 	return server
 }
