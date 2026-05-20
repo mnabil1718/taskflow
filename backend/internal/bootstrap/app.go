@@ -17,4 +17,7 @@ func newApp() *fiber.App {
 func registerRoutes(app *fiber.App) {
 	health := handler.NewHealthHandler()
 	app.Get("/health", health.Check)
+
+	v1 := app.Group("/api/v1")
+	_ = v1 // future route groups (auth, projects, tasks) attach here
 }
