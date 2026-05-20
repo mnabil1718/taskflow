@@ -10,10 +10,12 @@ import (
 	"github.com/gofiber/swagger"
 	"github.com/mnabil1718/taskflow/internal/config"
 	"github.com/mnabil1718/taskflow/internal/handler"
+	"github.com/mnabil1718/taskflow/internal/middleware"
 	"github.com/mnabil1718/taskflow/internal/response"
+	"github.com/mnabil1718/taskflow/internal/service"
 )
 
-func NewApp(cfg *config.Config, health *handler.HealthHandler, auth *handler.AuthHandler) *fiber.App {
+func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ReadBufferSize: 16 * 1024,
 	})
@@ -33,7 +35,7 @@ func NewApp(cfg *config.Config, health *handler.HealthHandler, auth *handler.Aut
 		},
 	}))
 
-	registerRoutes(app, health, auth)
+	registerRoutes(app, authSvc, health, auth, project)
 	return app
 }
 
@@ -50,7 +52,7 @@ func rateLimiter(max int, expiration time.Duration) fiber.Handler {
 	})
 }
 
-func registerRoutes(app *fiber.App, health *handler.HealthHandler, auth *handler.AuthHandler) {
+func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler) {
 	app.Get("/health", health.Check)
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
@@ -63,4 +65,16 @@ func registerRoutes(app *fiber.App, health *handler.HealthHandler, auth *handler
 	authGroup.Post("/login", auth.Login)
 	authGroup.Post("/logout", auth.Logout)
 	authGroup.Post("/refresh", auth.Refresh)
+
+	protected := v1.Group("", middleware.JWTProtected(authSvc))
+
+	projects := protected.Group("/projects")
+	projects.Post("", project.Create)
+	projects.Get("", project.List)
+	projects.Get("/:id", project.GetByID)
+	projects.Put("/:id", project.Update)
+	projects.Delete("/:id", project.Delete)
+	projects.Get("/:id/members", project.GetMembers)
+	projects.Post("/:id/members", project.AddMember)
+	projects.Delete("/:id/members/:userID", project.RemoveMember)
 }
