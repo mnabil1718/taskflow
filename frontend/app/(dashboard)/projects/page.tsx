@@ -270,7 +270,9 @@ export default function ProjectsPage() {
                                                                     <SortIcon isSorted={header.column.getIsSorted()} />
                                                                 </Button>
                                                             ) : (
-                                                                flexRender(header.column.columnDef.header, header.getContext())
+                                                                <span className="text-[0.8rem] font-medium">
+                                                                    {flexRender(header.column.columnDef.header, header.getContext())}
+                                                                </span>
                                                             )}
                                                     </TableHead>
                                                 );
