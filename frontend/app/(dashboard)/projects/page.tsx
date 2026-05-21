@@ -6,18 +6,11 @@ import {
     useReactTable,
     getCoreRowModel,
     getSortedRowModel,
-    flexRender,
     createColumnHelper,
     type SortingState,
     type RowSelectionState,
 } from "@tanstack/react-table";
-import {
-    ArrowUpDown,
-    ArrowUp,
-    ArrowDown,
-    FolderOpen,
-    Trash2,
-} from "lucide-react";
+import { FolderOpen, Trash2 } from "lucide-react";
 
 import { AppNavbar } from "@/components/app-navbar";
 import {
@@ -32,17 +25,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/data-table";
 import { useProjects, useBulkDeleteProjects } from "@/hooks/use-projects";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import { ProjectRowActions } from "@/components/projects/project-row-actions";
@@ -64,6 +48,7 @@ const statusVariant: Record<ProjectStatus, "default" | "secondary"> = {
 const columns = [
     columnHelper.display({
         id: "select",
+        meta: { headerClassName: "w-[40px]", cellClassName: "w-[40px]" },
         header: ({ table }) => (
             <Checkbox
                 checked={table.getIsAllPageRowsSelected()}
@@ -139,51 +124,6 @@ const columns = [
     }),
 ];
 
-// --- Skeleton ---
-
-function ProjectsTableSkeleton() {
-    return (
-        <Card>
-            <CardContent className="p-0">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[40px]"><Skeleton className="h-4 w-4" /></TableHead>
-                            {["Name", "Description", "Status", "Deadline", "Created"].map((h) => (
-                                <TableHead key={h}>
-                                    <Skeleton className="h-4 w-20" />
-                                </TableHead>
-                            ))}
-                            <TableHead className="w-[40px]" />
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <TableRow key={i}>
-                                <TableCell><Skeleton className="h-4 w-4" /></TableCell>
-                                <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                                <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
-                                <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                                <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                                <TableCell><Skeleton className="h-7 w-7 rounded-md" /></TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-    );
-}
-
-// --- Sort icon helper ---
-
-function SortIcon({ isSorted }: { isSorted: false | "asc" | "desc" }) {
-    if (isSorted === "asc") return <ArrowUp className="ml-1 size-3.5" />;
-    if (isSorted === "desc") return <ArrowDown className="ml-1 size-3.5" />;
-    return <ArrowUpDown className="ml-1 size-3.5 opacity-50" />;
-}
-
 // --- Page ---
 
 export default function ProjectsPage() {
@@ -243,67 +183,19 @@ export default function ProjectsPage() {
                     </div>
                 </div>
 
-                {isLoading ? (
-                    <ProjectsTableSkeleton />
-                ) : projects.length === 0 ? (
-                    <Card>
-                        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <DataTable
+                    table={table}
+                    isLoading={isLoading}
+                    empty={
+                        <>
                             <FolderOpen className="mb-3 size-10 text-muted-foreground" />
                             <p className="text-sm font-medium">No projects yet</p>
                             <p className="text-xs text-muted-foreground mt-1">
                                 Projects you create or join will appear here.
                             </p>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <Card>
-                        <CardContent className="p-0">
-                            <Table>
-                                <TableHeader>
-                                    {table.getHeaderGroups().map((hg) => (
-                                        <TableRow key={hg.id}>
-                                            {hg.headers.map((header) => {
-                                                const canSort = header.column.getCanSort();
-                                                return (
-                                                    <TableHead key={header.id} className={header.column.id === "select" ? "w-[40px]" : ""}>
-                                                        {header.isPlaceholder
-                                                            ? null
-                                                            : canSort ? (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="-ml-3 h-8"
-                                                                    onClick={header.column.getToggleSortingHandler()}
-                                                                >
-                                                                    {flexRender(header.column.columnDef.header, header.getContext())}
-                                                                    <SortIcon isSorted={header.column.getIsSorted()} />
-                                                                </Button>
-                                                            ) : (
-                                                                <span className="text-[0.8rem] font-medium">
-                                                                    {flexRender(header.column.columnDef.header, header.getContext())}
-                                                                </span>
-                                                            )}
-                                                    </TableHead>
-                                                );
-                                            })}
-                                        </TableRow>
-                                    ))}
-                                </TableHeader>
-                                <TableBody>
-                                    {table.getRowModel().rows.map((row) => (
-                                        <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined}>
-                                            {row.getVisibleCells().map((cell) => (
-                                                <TableCell key={cell.id}>
-                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
+                        </>
+                    }
+                />
 
                 <PaginationControls
                     page={page}
