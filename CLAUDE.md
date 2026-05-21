@@ -117,4 +117,5 @@ Rules:
 
 ## Current phase
 
-Backend: Go + Gin. DB Schema -> migrations -> auth -> project/task APIs -> tests
+Frontend: Next.js 14 + TanStack Query
+auth pages -> project view -> task management -> dashboard -> kanban
