@@ -187,7 +187,6 @@ export default function ProjectsPage() {
     const bulkDelete = useBulkDeleteProjects();
 
     const projects = data?.items ?? [];
-    const total = data?.total ?? 0;
     const totalPages = data?.total_pages ?? 0;
 
     const table = useReactTable({
@@ -216,12 +215,7 @@ export default function ProjectsPage() {
             <AppNavbar title="Projects" />
             <main className="flex-1 overflow-y-auto p-6 space-y-4">
                 <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-lg font-semibold">Your Projects</h2>
-                        <p className="text-sm text-muted-foreground">
-                            {isLoading ? "Loading…" : `${total} project${total === 1 ? "" : "s"}`}
-                        </p>
-                    </div>
+                    <h2 className="text-lg font-semibold">Your Projects</h2>
                     <div className="flex items-center gap-2">
                         {selectedCount > 0 && (
                             <Button
@@ -274,7 +268,9 @@ export default function ProjectsPage() {
                                                                     <SortIcon isSorted={header.column.getIsSorted()} />
                                                                 </Button>
                                                             ) : (
-                                                                flexRender(header.column.columnDef.header, header.getContext())
+                                                                <span className="text-[0.8rem] font-medium">
+                                                                    {flexRender(header.column.columnDef.header, header.getContext())}
+                                                                </span>
                                                             )}
                                                     </TableHead>
                                                 );
