@@ -47,8 +47,8 @@ services:
       DB_PASSWORD: taskflow
       DB_NAME: taskflow
       DB_SSLMODE: disable
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      JWT_ACCESS_SECRET: secret123
+      JWT_REFRESH_SECRET: secret123
       JWT_ACCESS_EXPIRY: "15m"
       JWT_REFRESH_EXPIRY: "168h"
     healthcheck:
