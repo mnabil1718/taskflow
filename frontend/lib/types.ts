@@ -62,6 +62,12 @@ export interface CreateProjectRequest {
   name: string;
   description?: string;
   deadline?: string;
+  members?: ProjectMemberInvite[];
+}
+
+export interface ProjectMemberInvite {
+  user_id: string;
+  role: ProjectRole;
 }
 
 export interface UpdateProjectRequest {

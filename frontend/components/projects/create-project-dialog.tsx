@@ -16,6 +16,10 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    MemberInvitePicker,
+    type InvitedUser,
+} from "@/components/projects/member-invite-picker";
 
 // Today as YYYY-MM-DD in the user's local timezone — used as the min for the
 // deadline picker so we don't allow scheduling in the past.
@@ -30,7 +34,12 @@ export function CreateProjectDialog() {
     const createProject = useCreateProject();
 
     const form = useAppForm({
-        defaultValues: { name: "", description: "", deadline: "" },
+        defaultValues: {
+            name: "",
+            description: "",
+            deadline: "",
+            members: [] as InvitedUser[],
+        },
         onSubmit: async ({ value, formApi }) => {
             try {
                 await createProject.mutateAsync({
@@ -39,6 +48,9 @@ export function CreateProjectDialog() {
                     // <input type="date"> emits YYYY-MM-DD; backend wants RFC3339.
                     deadline: value.deadline
                         ? new Date(`${value.deadline}T00:00:00Z`).toISOString()
+                        : undefined,
+                    members: value.members.length
+                        ? value.members.map((m) => ({ user_id: m.user_id, role: m.role }))
                         : undefined,
                 });
                 formApi.reset();
@@ -124,6 +136,16 @@ export function CreateProjectDialog() {
                                     type="date"
                                     min={todayLocalISODate()}
                                     desc="Optional — leave blank for none"
+                                />
+                            )}
+                        />
+
+                        <form.AppField
+                            name="members"
+                            children={(field) => (
+                                <MemberInvitePicker
+                                    value={field.state.value}
+                                    onChange={field.handleChange}
                                 />
                             )}
                         />
