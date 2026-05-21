@@ -7,15 +7,7 @@ import { useAppForm } from "@/lib/app-form";
 import { useCreateProject } from "@/hooks/use-projects";
 import { createProjectSchema } from "@/schemas/project.schema";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/form-dialog";
 import {
     MemberInvitePicker,
     type InvitedUser,
@@ -62,108 +54,79 @@ export function CreateProjectDialog() {
     });
 
     return (
-        <Dialog
+        <FormDialog
             open={open}
             onOpenChange={(next) => {
                 setOpen(next);
                 if (!next) form.reset();
             }}
+            title="Create project"
+            description="Give your project a name. You can update details later."
+            submitLabel="Create"
+            form={form}
+            trigger={
+                <Button size="lg" className="px-4!">
+                    <Plus className="size-4" />
+                    New Project
+                </Button>
+            }
         >
-            <DialogTrigger
-                render={
-                    <Button size="lg" className="px-4!">
-                        <Plus className="size-4" />
-                        New Project
-                    </Button>
-                }
+            <form.AppField
+                name="name"
+                validators={{
+                    onChange: createProjectSchema.shape.name,
+                    onBlur: createProjectSchema.shape.name,
+                }}
+                children={(field) => (
+                    <field.InputField
+                        label="Name"
+                        placeholder="e.g. Q4 Roadmap"
+                        autoComplete="off"
+                        required
+                    />
+                )}
             />
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Create project</DialogTitle>
-                    <DialogDescription>
-                        Give your project a name. You can update details later.
-                    </DialogDescription>
-                </DialogHeader>
 
-                <form.AppForm>
-                    <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            form.handleSubmit();
-                        }}
-                        className="space-y-4"
-                    >
-                        <form.AppField
-                            name="name"
-                            validators={{
-                                onChange: createProjectSchema.shape.name,
-                                onBlur: createProjectSchema.shape.name,
-                            }}
-                            children={(field) => (
-                                <field.InputField
-                                    label="Name"
-                                    placeholder="e.g. Q4 Roadmap"
-                                    autoComplete="off"
-                                    required
-                                />
-                            )}
-                        />
+            <form.AppField
+                name="description"
+                validators={{
+                    onChange: createProjectSchema.shape.description,
+                    onBlur: createProjectSchema.shape.description,
+                }}
+                children={(field) => (
+                    <field.TextareaField
+                        label="Description"
+                        placeholder="What is this project about?"
+                        rows={3}
+                    />
+                )}
+            />
 
-                        <form.AppField
-                            name="description"
-                            validators={{
-                                onChange: createProjectSchema.shape.description,
-                                onBlur: createProjectSchema.shape.description,
-                            }}
-                            children={(field) => (
-                                <field.TextareaField
-                                    label="Description"
-                                    placeholder="What is this project about?"
-                                    rows={3}
-                                />
-                            )}
-                        />
+            <form.AppField
+                name="deadline"
+                validators={{
+                    onChange: createProjectSchema.shape.deadline,
+                    onBlur: createProjectSchema.shape.deadline,
+                }}
+                children={(field) => (
+                    <field.InputField
+                        label="Deadline"
+                        type="date"
+                        min={todayLocalISODate()}
+                        desc="Optional — leave blank for none"
+                    />
+                )}
+            />
 
-                        <form.AppField
-                            name="deadline"
-                            validators={{
-                                onChange: createProjectSchema.shape.deadline,
-                                onBlur: createProjectSchema.shape.deadline,
-                            }}
-                            children={(field) => (
-                                <field.InputField
-                                    label="Deadline"
-                                    type="date"
-                                    min={todayLocalISODate()}
-                                    desc="Optional — leave blank for none"
-                                />
-                            )}
-                        />
-
-                        <form.AppField
-                            name="members"
-                            children={(field) => (
-                                <MemberInvitePicker
-                                    value={field.state.value}
-                                    onChange={field.handleChange}
-                                />
-                            )}
-                        />
-
-                        <DialogFooter>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setOpen(false)}
-                                disabled={createProject.isPending}
-                            >
-                                Cancel
-                            </Button>
-                            <form.SubmitButton className="sm:w-auto">Create</form.SubmitButton>
-                        </DialogFooter>
-                    </form>
-                </form.AppForm>
-            </DialogContent>
-        </Dialog>
+            <form.AppField
+                name="members"
+                children={(field) => (
+                    <MemberInvitePicker
+                        value={field.state.value}
+                        onChange={field.handleChange}
+                    />
+                )}
+            />
+        </FormDialog>
     );
 }

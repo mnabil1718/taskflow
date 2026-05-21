@@ -10,15 +10,14 @@ import {
     useUpdateProject,
 } from "@/hooks/use-projects";
 import { editProjectSchema } from "@/schemas/project.schema";
-import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { FormDialog } from "@/components/form-dialog";
 import {
     MemberInvitePicker,
     type InvitedUser,
@@ -57,52 +56,50 @@ interface EditProjectDialogProps {
     onOpenChange: (open: boolean) => void;
 }
 
+// While the existing member list loads we render a plain Dialog with a
+// spinner — FormDialog wants a useAppForm instance, but we can't build the
+// form until we know the initial members. Once loaded, the inner form is
+// mounted by EditProjectForm which calls FormDialog with the prepared form.
 export function EditProjectDialog({ project, open, onOpenChange }: EditProjectDialogProps) {
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Edit project</DialogTitle>
-                    <DialogDescription>
-                        Update the project details and member list.
-                    </DialogDescription>
-                </DialogHeader>
-                <EditProjectFormBody project={project} onClose={() => onOpenChange(false)} />
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-interface EditProjectFormBodyProps {
-    project: Project;
-    onClose: () => void;
-}
-
-// Renders the actual form only once we've fetched the existing member list,
-// so the picker initialises with chips for every current member instead of
-// briefly showing empty and then re-syncing.
-function EditProjectFormBody({ project, onClose }: EditProjectFormBodyProps) {
     const { data: members, isLoading } = useProjectMembers(project.id);
 
     if (isLoading || !members) {
         return (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Loading members…
-            </div>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit project</DialogTitle>
+                        <DialogDescription>
+                            Update the project details and member list.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Loading members…
+                    </div>
+                </DialogContent>
+            </Dialog>
         );
     }
 
-    return <EditProjectForm project={project} initialMembers={toInvitedUsers(members)} onClose={onClose} />;
+    return (
+        <EditProjectForm
+            project={project}
+            initialMembers={toInvitedUsers(members)}
+            open={open}
+            onOpenChange={onOpenChange}
+        />
+    );
 }
 
 interface EditProjectFormProps {
     project: Project;
     initialMembers: InvitedUser[];
-    onClose: () => void;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
 }
 
-function EditProjectForm({ project, initialMembers, onClose }: EditProjectFormProps) {
+function EditProjectForm({ project, initialMembers, open, onOpenChange }: EditProjectFormProps) {
     const updateProject = useUpdateProject();
     const addMember = useAddMember(project.id);
     const removeMember = useRemoveMember(project.id);
@@ -143,7 +140,7 @@ function EditProjectForm({ project, initialMembers, onClose }: EditProjectFormPr
                     ...toRemove.map((m) => removeMember.mutateAsync(m.user_id)),
                 ]);
 
-                onClose();
+                onOpenChange(false);
             } catch {
                 // toasted by api interceptor
             }
@@ -151,99 +148,86 @@ function EditProjectForm({ project, initialMembers, onClose }: EditProjectFormPr
     });
 
     return (
-        <form.AppForm>
-            <form
-                onSubmit={(e) => {
-                    e.preventDefault();
-                    form.handleSubmit();
+        <FormDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Edit project"
+            description="Update the project details and member list."
+            submitLabel="Save changes"
+            form={form}
+        >
+            <form.AppField
+                name="name"
+                validators={{
+                    onChange: editProjectSchema.shape.name,
+                    onBlur: editProjectSchema.shape.name,
                 }}
-                className="space-y-4"
-            >
-                <form.AppField
-                    name="name"
-                    validators={{
-                        onChange: editProjectSchema.shape.name,
-                        onBlur: editProjectSchema.shape.name,
-                    }}
-                    children={(field) => (
-                        <field.InputField
-                            label="Name"
-                            placeholder="e.g. Q4 Roadmap"
-                            autoComplete="off"
-                            required
-                        />
-                    )}
-                />
+                children={(field) => (
+                    <field.InputField
+                        label="Name"
+                        placeholder="e.g. Q4 Roadmap"
+                        autoComplete="off"
+                        required
+                    />
+                )}
+            />
 
-                <form.AppField
-                    name="description"
-                    validators={{
-                        onChange: editProjectSchema.shape.description,
-                        onBlur: editProjectSchema.shape.description,
-                    }}
-                    children={(field) => (
-                        <field.TextareaField
-                            label="Description"
-                            placeholder="What is this project about?"
-                            rows={3}
-                        />
-                    )}
-                />
+            <form.AppField
+                name="description"
+                validators={{
+                    onChange: editProjectSchema.shape.description,
+                    onBlur: editProjectSchema.shape.description,
+                }}
+                children={(field) => (
+                    <field.TextareaField
+                        label="Description"
+                        placeholder="What is this project about?"
+                        rows={3}
+                    />
+                )}
+            />
 
-                <form.AppField
-                    name="status"
-                    validators={{
-                        onChange: editProjectSchema.shape.status,
-                        onBlur: editProjectSchema.shape.status,
-                    }}
-                    children={(field) => (
-                        <field.SelectField
-                            label="Status"
-                            options={statusOptions}
-                            required
-                        />
-                    )}
-                />
+            <form.AppField
+                name="status"
+                validators={{
+                    onChange: editProjectSchema.shape.status,
+                    onBlur: editProjectSchema.shape.status,
+                }}
+                children={(field) => (
+                    <field.SelectField
+                        label="Status"
+                        options={statusOptions}
+                        required
+                    />
+                )}
+            />
 
-                <form.AppField
-                    name="deadline"
-                    validators={{
-                        onChange: editProjectSchema.shape.deadline,
-                        onBlur: editProjectSchema.shape.deadline,
-                    }}
-                    children={(field) => (
-                        <field.InputField
-                            label="Deadline"
-                            type="date"
-                            desc="Optional — leave blank for none"
-                        />
-                    )}
-                />
+            <form.AppField
+                name="deadline"
+                validators={{
+                    onChange: editProjectSchema.shape.deadline,
+                    onBlur: editProjectSchema.shape.deadline,
+                }}
+                children={(field) => (
+                    <field.InputField
+                        label="Deadline"
+                        type="date"
+                        desc="Optional — leave blank for none"
+                    />
+                )}
+            />
 
-                <form.AppField
-                    name="members"
-                    children={(field) => (
-                        <MemberInvitePicker
-                            value={field.state.value}
-                            onChange={field.handleChange}
-                            label="Members"
-                            desc="Add or remove project members"
-                        />
-                    )}
-                />
-
-                <DialogFooter>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={onClose}
-                        disabled={updateProject.isPending}
-                    >
-                        Cancel
-                    </Button>
-                    <form.SubmitButton className="sm:w-auto">Save changes</form.SubmitButton>
-                </DialogFooter>
-            </form>
-        </form.AppForm>
+            <form.AppField
+                name="members"
+                children={(field) => (
+                    <MemberInvitePicker
+                        value={field.state.value}
+                        onChange={field.handleChange}
+                        label="Members"
+                        desc="Add or remove project members"
+                    />
+                )}
+            />
+        </FormDialog>
     );
 }
