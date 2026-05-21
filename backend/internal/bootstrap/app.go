@@ -71,6 +71,7 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 	projects := protected.Group("/projects")
 	projects.Post("", project.Create)
 	projects.Get("", project.List)
+	projects.Post("/bulk-delete", project.BulkDelete)
 	projects.Get("/:id", project.GetByID)
 	projects.Put("/:id", project.Update)
 	projects.Delete("/:id", project.Delete)

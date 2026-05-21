@@ -23,10 +23,13 @@ type ProjectService interface {
 	List(ctx context.Context, userID string, page, limit int) ([]*model.Project, int, error)
 	Update(ctx context.Context, userID, projectID string, req *model.UpdateProjectRequest) (*model.Project, error)
 	Delete(ctx context.Context, userID, projectID string) error
+	BulkDelete(ctx context.Context, userID string, ids []string) (int, error)
 	AddMember(ctx context.Context, ownerID, projectID string, req *model.AddMemberRequest) (*model.ProjectMember, error)
 	RemoveMember(ctx context.Context, ownerID, projectID, targetUserID string) error
 	GetMembers(ctx context.Context, userID, projectID string) ([]*model.ProjectMember, error)
 }
+
+const bulkDeleteMaxIDs = 100
 
 type projectService struct {
 	projectRepo repository.ProjectRepository
@@ -124,6 +127,25 @@ func (s *projectService) Delete(ctx context.Context, userID, projectID string) e
 	}
 
 	return s.projectRepo.Delete(ctx, projectID)
+}
+
+// BulkDelete soft-deletes every project in ids that the caller owns. IDs
+// belonging to projects the caller does not own — or that don't exist — are
+// silently skipped so the operation stays idempotent. Returns the number of
+// projects actually deleted.
+func (s *projectService) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("%w: ids is required", ErrValidation)
+	}
+	if len(ids) > bulkDeleteMaxIDs {
+		return 0, fmt.Errorf("%w: at most %d ids per request", ErrValidation, bulkDeleteMaxIDs)
+	}
+	for _, id := range ids {
+		if id == "" {
+			return 0, fmt.Errorf("%w: ids must not contain empty values", ErrValidation)
+		}
+	}
+	return s.projectRepo.BulkSoftDelete(ctx, userID, ids)
 }
 
 func (s *projectService) AddMember(ctx context.Context, ownerID, projectID string, req *model.AddMemberRequest) (*model.ProjectMember, error) {

@@ -45,6 +45,7 @@ func buildProjectApp(db *sql.DB) *fiber.App {
 	projects := app.Group("/api/v1/projects", middleware.JWTProtected(authSvc))
 	projects.Post("", projectH.Create)
 	projects.Get("", projectH.List)
+	projects.Post("/bulk-delete", projectH.BulkDelete)
 	projects.Get("/:id", projectH.GetByID)
 	projects.Put("/:id", projectH.Update)
 	projects.Delete("/:id", projectH.Delete)
@@ -730,6 +731,90 @@ func TestGetMembersHandler_NoAuth(t *testing.T) {
 	app := buildProjectApp(integrationDB.DB)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/some-id/members", nil)
+	resp, _ := app.Test(req, 5000)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+// ---------------------------------------------------------------------------
+// BulkDelete
+// ---------------------------------------------------------------------------
+
+type bulkDeleteResp struct {
+	DeletedCount int `json:"deleted_count"`
+}
+
+func extractBulkDelete(t *testing.T, r apiResp) bulkDeleteResp {
+	t.Helper()
+	var bd bulkDeleteResp
+	require.NoError(t, json.Unmarshal(r.Data, &bd))
+	return bd
+}
+
+func TestBulkDeleteHandler_Success(t *testing.T) {
+	integrationDB.Truncate(t)
+	app := buildProjectApp(integrationDB.DB)
+	token := registerUser(t, app, "Alice", "alice@example.com", "password123")
+	p1 := createProject(t, app, token, "Alpha")
+	p2 := createProject(t, app, token, "Beta")
+	p3 := createProject(t, app, token, "Gamma")
+
+	resp := authPost(app, "/api/v1/projects/bulk-delete",
+		map[string]any{"ids": []string{p1.ID, p2.ID}}, token)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	bd := extractBulkDelete(t, decode(t, resp))
+	assert.Equal(t, 2, bd.DeletedCount)
+
+	// remaining project should still be reachable
+	resp2 := authGet(app, "/api/v1/projects/"+p3.ID, token)
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+
+	// deleted ones should 404
+	resp3 := authGet(app, "/api/v1/projects/"+p1.ID, token)
+	assert.Equal(t, http.StatusNotFound, resp3.StatusCode)
+}
+
+func TestBulkDeleteHandler_SkipsNonOwnedAndMissing(t *testing.T) {
+	integrationDB.Truncate(t)
+	app := buildProjectApp(integrationDB.DB)
+	aliceToken := registerUser(t, app, "Alice", "alice@example.com", "password123")
+	bobToken := registerUser(t, app, "Bob", "bob@example.com", "password123")
+	aliceProject := createProject(t, app, aliceToken, "Alpha")
+	bobProject := createProject(t, app, bobToken, "Bob's Project")
+
+	// Bob attempts to bulk-delete his own + Alice's project + a non-existent ID
+	resp := authPost(app, "/api/v1/projects/bulk-delete", map[string]any{
+		"ids": []string{bobProject.ID, aliceProject.ID, "00000000-0000-0000-0000-000000000000"},
+	}, bobToken)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	bd := extractBulkDelete(t, decode(t, resp))
+	assert.Equal(t, 1, bd.DeletedCount)
+
+	// Alice's project survives
+	resp2 := authGet(app, "/api/v1/projects/"+aliceProject.ID, aliceToken)
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+}
+
+func TestBulkDeleteHandler_EmptyIDs(t *testing.T) {
+	integrationDB.Truncate(t)
+	app := buildProjectApp(integrationDB.DB)
+	token := registerUser(t, app, "Alice", "alice@example.com", "password123")
+
+	resp := authPost(app, "/api/v1/projects/bulk-delete",
+		map[string]any{"ids": []string{}}, token)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestBulkDeleteHandler_NoAuth(t *testing.T) {
+	integrationDB.Truncate(t)
+	app := buildProjectApp(integrationDB.DB)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects/bulk-delete",
+		strings.NewReader(`{"ids":["some-id"]}`))
+	req.Header.Set("Content-Type", "application/json")
 	resp, _ := app.Test(req, 5000)
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)

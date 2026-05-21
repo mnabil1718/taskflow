@@ -51,3 +51,11 @@ type AddMemberRequest struct {
 	UserID string      `json:"user_id" example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
 	Role   ProjectRole `json:"role"    example:"member"`
 }
+
+type BulkDeleteProjectsRequest struct {
+	IDs []string `json:"ids" example:"c303012a-6275-4aa3-adec-ebfb123f4567,d404123b-7386-5bb4-bcfe-fcfc234e5678"`
+}
+
+type BulkDeleteProjectsResponse struct {
+	DeletedCount int `json:"deleted_count" example:"3"`
+}

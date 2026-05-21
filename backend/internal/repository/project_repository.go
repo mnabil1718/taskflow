@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/mnabil1718/taskflow/internal/model"
@@ -18,6 +19,7 @@ type ProjectRepository interface {
 	List(ctx context.Context, userID string, page, limit int) ([]*model.Project, int, error)
 	Update(ctx context.Context, p *model.Project) error
 	Delete(ctx context.Context, id string) error
+	BulkSoftDelete(ctx context.Context, ownerID string, ids []string) (int, error)
 	AddMember(ctx context.Context, projectID, userID string, role model.ProjectRole) error
 	RemoveMember(ctx context.Context, projectID, userID string) error
 	GetMember(ctx context.Context, projectID, userID string) (*model.ProjectMember, error)
@@ -68,7 +70,7 @@ func (r *projectRepository) GetByID(ctx context.Context, id string) (*model.Proj
 
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, name, description, status, deadline, owner_id, created_at, updated_at
-		FROM projects WHERE id = $1
+		FROM projects WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&p.ID, &p.Name, &desc, &p.Status, &deadline, &p.OwnerID, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -95,7 +97,7 @@ func (r *projectRepository) List(ctx context.Context, userID string, page, limit
 		SELECT COUNT(DISTINCT p.id)
 		FROM projects p
 		JOIN project_members pm ON p.id = pm.project_id
-		WHERE pm.user_id = $1
+		WHERE pm.user_id = $1 AND p.deleted_at IS NULL
 	`, userID).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count projects: %w", err)
@@ -105,7 +107,7 @@ func (r *projectRepository) List(ctx context.Context, userID string, page, limit
 		SELECT DISTINCT p.id, p.name, p.description, p.status, p.deadline, p.owner_id, p.created_at, p.updated_at
 		FROM projects p
 		JOIN project_members pm ON p.id = pm.project_id
-		WHERE pm.user_id = $1
+		WHERE pm.user_id = $1 AND p.deleted_at IS NULL
 		ORDER BY p.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, userID, limit, offset)
@@ -138,7 +140,7 @@ func (r *projectRepository) Update(ctx context.Context, p *model.Project) error 
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE projects
 		SET name = $1, description = $2, status = $3, deadline = $4, updated_at = NOW()
-		WHERE id = $5
+		WHERE id = $5 AND deleted_at IS NULL
 	`, p.Name, nullableString(p.Description), p.Status, p.Deadline, p.ID)
 	if err != nil {
 		return fmt.Errorf("update project: %w", err)
@@ -151,7 +153,10 @@ func (r *projectRepository) Update(ctx context.Context, p *model.Project) error 
 }
 
 func (r *projectRepository) Delete(ctx context.Context, id string) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM projects WHERE id = $1`, id)
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE projects SET deleted_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+	`, id)
 	if err != nil {
 		return fmt.Errorf("delete project: %w", err)
 	}
@@ -160,6 +165,39 @@ func (r *projectRepository) Delete(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// BulkSoftDelete marks every project the caller owns and that hasn't already
+// been deleted as deleted_at = NOW(). Projects the caller doesn't own — or
+// IDs that don't exist — are silently skipped; the returned count tells the
+// caller how many rows were actually affected. This keeps the operation
+// idempotent under concurrent deletes without requiring a per-ID round trip.
+func (r *projectRepository) BulkSoftDelete(ctx context.Context, ownerID string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, ownerID)
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE projects SET deleted_at = NOW()
+		WHERE owner_id = $1
+		  AND deleted_at IS NULL
+		  AND id IN (%s)
+	`, strings.Join(placeholders, ","))
+
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("bulk soft delete projects: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
 }
 
 func (r *projectRepository) AddMember(ctx context.Context, projectID, userID string, role model.ProjectRole) error {
@@ -242,7 +280,10 @@ func (r *projectRepository) IsMember(ctx context.Context, projectID, userID stri
 	var exists bool
 	err := r.db.QueryRowContext(ctx, `
 		SELECT EXISTS(
-			SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2
+			SELECT 1
+			FROM project_members pm
+			JOIN projects p ON p.id = pm.project_id
+			WHERE pm.project_id = $1 AND pm.user_id = $2 AND p.deleted_at IS NULL
 		)
 	`, projectID, userID).Scan(&exists)
 	return exists, err

@@ -102,6 +102,20 @@ func (m *mockProjectRepo) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *mockProjectRepo) BulkSoftDelete(_ context.Context, ownerID string, ids []string) (int, error) {
+	count := 0
+	for _, id := range ids {
+		p, ok := m.projects[id]
+		if !ok || p.OwnerID != ownerID {
+			continue
+		}
+		delete(m.projects, id)
+		delete(m.members, id)
+		count++
+	}
+	return count, nil
+}
+
 func (m *mockProjectRepo) AddMember(_ context.Context, projectID, userID string, role model.ProjectRole) error {
 	if m.addMemberErr != nil {
 		return m.addMemberErr

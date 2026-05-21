@@ -157,7 +157,7 @@ func (h *ProjectHandler) Update(c *fiber.Ctx) error {
 
 // Delete godoc
 // @Summary      Delete a project
-// @Description  Permanently deletes a project and all its tasks. Only the owner can delete.
+// @Description  Soft-deletes a project. Only the owner can delete.
 // @Tags         projects
 // @Produce      json
 // @Param        id  path     string       true "Project UUID"
@@ -176,6 +176,37 @@ func (h *ProjectHandler) Delete(c *fiber.Ctx) error {
 	}
 
 	return response.Success(c, fiber.StatusOK, "project deleted", nil)
+}
+
+// BulkDelete godoc
+// @Summary      Bulk soft-delete projects
+// @Description  Soft-deletes every project the caller owns from the given list. IDs the caller does not own — or that don't exist — are silently skipped. Returns the number of projects actually deleted.
+// @Tags         projects
+// @Accept       json
+// @Produce      json
+// @Param        request body     model.BulkDeleteProjectsRequest                       true "IDs to delete"
+// @Success      200     {object} response.Body{data=model.BulkDeleteProjectsResponse} "Projects deleted"
+// @Failure      400     {object} response.Body                                         "Validation error or malformed body"
+// @Failure      401     {object} response.Body                                         "Missing or invalid token"
+// @Failure      500     {object} response.Body                                         "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/bulk-delete [post]
+func (h *ProjectHandler) BulkDelete(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	var req model.BulkDeleteProjectsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	count, err := h.svc.BulkDelete(c.Context(), userID, req.IDs)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "projects deleted", model.BulkDeleteProjectsResponse{
+		DeletedCount: count,
+	})
 }
 
 // AddMember godoc
