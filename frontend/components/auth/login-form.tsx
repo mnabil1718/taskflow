@@ -2,11 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { toast } from "sonner";
 
 import { useAppForm } from "@/lib/app-form";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api";
 import { loginSchema } from "@/schemas/login.schema";
 import {
     Card,
@@ -27,12 +25,8 @@ export function LoginForm() {
             try {
                 await login(value);
                 router.push("/dashboard");
-            } catch (err) {
-                toast.error(
-                    err instanceof ApiError
-                        ? err.message
-                        : "Something went wrong. Please try again."
-                );
+            } catch {
+                // error is toasted by the api interceptor
             }
         },
     });
