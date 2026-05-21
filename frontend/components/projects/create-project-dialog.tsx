@@ -59,7 +59,7 @@ export function CreateProjectDialog() {
         >
             <DialogTrigger
                 render={
-                    <Button size="sm">
+                    <Button size="lg" className="px-4!">
                         <Plus className="size-4" />
                         New Project
                     </Button>

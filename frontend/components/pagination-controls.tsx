@@ -70,21 +70,17 @@ export function PaginationControls({
 
     return (
         <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
                 Showing{" "}
-                <span className="font-medium text-foreground tabular-nums">
+                <span className="font-medium tabular-nums">
                     {firstOnPage}
                 </span>
                 –
-                <span className="font-medium text-foreground tabular-nums">
+                <span className="font-medium tabular-nums">
                     {lastOnPage}
                 </span>{" "}
                 of{" "}
-                <span className="font-medium text-foreground tabular-nums">{total}</span>
-                {" · "}
-                <span className="tabular-nums">
-                    Page {page} of {totalPages}
-                </span>
+                <span className="font-medium tabular-nums">{total}</span>
             </p>
 
             <Pagination className="mx-0 w-auto justify-end">
