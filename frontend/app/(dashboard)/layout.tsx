@@ -1,5 +1,6 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { AppFooter } from "@/components/app-footer";
 
 export default function DashboardLayout({
     children,
@@ -11,9 +12,7 @@ export default function DashboardLayout({
             <AppSidebar />
             <div className="flex flex-1 flex-col overflow-hidden">
                 {children}
-                <footer className="border-t px-6 py-3 text-xs text-muted-foreground">
-                    © {new Date().getFullYear()} TaskFlow
-                </footer>
+                <AppFooter />
             </div>
         </SidebarProvider>
     );

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import NextTopLoader from "nextjs-toploader";
 import { cn } from "@/lib/utils";
 import { Providers } from "@/components/providers";
 import "./globals.css";
@@ -20,6 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("font-sans", inter.variable, jetbrainsMono.variable)}>
       <body>
+        <NextTopLoader color="#3b82f6" showSpinner={false} />
         <Providers>{children}</Providers>
       </body>
     </html>
