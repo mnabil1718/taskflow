@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
-import { useDeleteProject } from "@/hooks/use-projects";
+import { useDeleteProject, useUpdateProject } from "@/hooks/use-projects";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -20,6 +20,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EditProjectDialog } from "@/components/projects/edit-project-dialog";
@@ -35,6 +36,7 @@ export function ProjectRowActions({ project }: ProjectRowActionsProps) {
     const { user } = useAuth();
     const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
     const deleteProject = useDeleteProject();
+    const updateProject = useUpdateProject();
 
     const isOwner = user?.id === project.owner_id;
     if (!isOwner) return null;
@@ -42,6 +44,19 @@ export function ProjectRowActions({ project }: ProjectRowActionsProps) {
     const handleDelete = async () => {
         await deleteProject.mutateAsync(project.id);
         setActiveDialog(null);
+    };
+
+    const isArchived = project.status === "archived";
+    const handleToggleStatus = () => {
+        updateProject.mutate({
+            id: project.id,
+            data: {
+                name: project.name,
+                description: project.description,
+                deadline: project.deadline,
+                status: isArchived ? "active" : "archived",
+            },
+        });
     };
 
     return (
@@ -59,6 +74,14 @@ export function ProjectRowActions({ project }: ProjectRowActionsProps) {
                         <Pencil />
                         Edit
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                        onClick={handleToggleStatus}
+                        disabled={updateProject.isPending}
+                    >
+                        {isArchived ? <ArchiveRestore /> : <Archive />}
+                        {isArchived ? "Restore" : "Archive"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                         variant="destructive"
                         onClick={() => setActiveDialog("delete")}
