@@ -119,7 +119,16 @@ export function RegisterForm() {
                         <form.AppField
                             name="confirm_password"
                             validators={{
-                                onBlur: registerSchema.shape.confirm_password,
+                                onChange: ({ value, fieldApi }) => {
+                                    if (!value) return "Please confirm your password";
+                                    if (value !== fieldApi.form.state.values.password)
+                                        return "Passwords do not match";
+                                },
+                                onBlur: ({ value, fieldApi }) => {
+                                    if (!value) return "Please confirm your password";
+                                    if (value !== fieldApi.form.state.values.password)
+                                        return "Passwords do not match";
+                                },
                             }}
                             children={(field) => (
                                 <field.InputField
