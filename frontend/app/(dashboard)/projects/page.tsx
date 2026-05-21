@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/table";
 import { useProjects, useBulkDeleteProjects } from "@/hooks/use-projects";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
+import { formatDate } from "@/lib/date-utils";
 import type { Project, ProjectStatus } from "@/lib/types";
 
 const PAGE_SIZE = 10;
@@ -85,7 +86,7 @@ const columns = [
         cell: (info) => (
             <Link
                 href={`/projects/${info.row.original.id}`}
-                className="font-medium hover:underline"
+                className="hover:underline"
             >
                 {info.getValue()}
             </Link>
@@ -117,7 +118,7 @@ const columns = [
             const v = info.getValue();
             return (
                 <span className="text-muted-foreground">
-                    {v ? new Date(v).toLocaleDateString() : "—"}
+                    {v ? formatDate(v) : "—"}
                 </span>
             );
         },
@@ -126,7 +127,7 @@ const columns = [
         header: "Created",
         cell: (info) => (
             <span className="text-muted-foreground">
-                {new Date(info.getValue()).toLocaleDateString()}
+                {formatDate(info.getValue())}
             </span>
         ),
     }),
@@ -187,6 +188,7 @@ export default function ProjectsPage() {
     const bulkDelete = useBulkDeleteProjects();
 
     const projects = data?.items ?? [];
+    const total = data?.total ?? 0;
     const totalPages = data?.total_pages ?? 0;
 
     const table = useReactTable({
@@ -268,9 +270,7 @@ export default function ProjectsPage() {
                                                                     <SortIcon isSorted={header.column.getIsSorted()} />
                                                                 </Button>
                                                             ) : (
-                                                                <span className="text-[0.8rem] font-medium">
-                                                                    {flexRender(header.column.columnDef.header, header.getContext())}
-                                                                </span>
+                                                                flexRender(header.column.columnDef.header, header.getContext())
                                                             )}
                                                     </TableHead>
                                                 );
