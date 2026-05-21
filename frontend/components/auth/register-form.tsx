@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useAppForm } from "@/lib/app-form";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api";
-import { loginSchema } from "@/schemas/login.schema";
+import { registerSchema } from "@/schemas/register.schema";
 import {
     Card,
     CardContent,
@@ -15,17 +15,21 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { Brand } from "../brand";
+import { Brand } from "@/components/brand";
 
-export function LoginForm() {
-    const { login } = useAuth();
+export function RegisterForm() {
+    const { register } = useAuth();
     const router = useRouter();
 
     const form = useAppForm({
-        defaultValues: { email: "", password: "" },
+        defaultValues: { name: "", email: "", password: "", confirm_password: "" },
         onSubmit: async ({ value }) => {
             try {
-                await login(value);
+                await register({
+                    name: value.name,
+                    email: value.email,
+                    password: value.password,
+                });
                 router.push("/dashboard");
             } catch (err) {
                 toast.error(
@@ -44,10 +48,10 @@ export function LoginForm() {
             </div>
             <CardHeader className="pb-2">
                 <CardTitle className="text-2xl font-semibold tracking-tight">
-                    Sign in to your account
+                    Create an account
                 </CardTitle>
                 <CardDescription>
-                    Enter your credentials to access TaskFlow
+                    Sign up to start managing your tasks
                 </CardDescription>
             </CardHeader>
 
@@ -61,10 +65,27 @@ export function LoginForm() {
                         className="space-y-5"
                     >
                         <form.AppField
+                            name="name"
+                            validators={{
+                                onChange: registerSchema.shape.name,
+                                onBlur: registerSchema.shape.name,
+                            }}
+                            children={(field) => (
+                                <field.InputField
+                                    label="Name"
+                                    type="text"
+                                    placeholder="John Doe"
+                                    autoComplete="name"
+                                    required
+                                />
+                            )}
+                        />
+
+                        <form.AppField
                             name="email"
                             validators={{
-                                onChange: loginSchema.shape.email,
-                                onBlur: loginSchema.shape.email,
+                                onChange: registerSchema.shape.email,
+                                onBlur: registerSchema.shape.email,
                             }}
                             children={(field) => (
                                 <field.InputField
@@ -72,6 +93,7 @@ export function LoginForm() {
                                     type="email"
                                     placeholder="you@example.com"
                                     autoComplete="email"
+                                    required
                                 />
                             )}
                         />
@@ -79,29 +101,47 @@ export function LoginForm() {
                         <form.AppField
                             name="password"
                             validators={{
-                                onChange: loginSchema.shape.password,
-                                onBlur: loginSchema.shape.password,
+                                onChange: registerSchema.shape.password,
+                                onBlur: registerSchema.shape.password,
                             }}
                             children={(field) => (
                                 <field.InputField
                                     label="Password"
                                     type="password"
-                                    autoComplete="current-password"
-                                    placeholder="Enter your password"
+                                    placeholder="Enter new password"
+                                    autoComplete="new-password"
+                                    desc="Must be at least 8 characters"
+                                    required
+                                />
+                            )}
+                        />
+
+                        <form.AppField
+                            name="confirm_password"
+                            validators={{
+                                onBlur: registerSchema.shape.confirm_password,
+                            }}
+                            children={(field) => (
+                                <field.InputField
+                                    label="Confirm password"
+                                    type="password"
+                                    placeholder="Repeat your password"
+                                    autoComplete="new-password"
+                                    required
                                 />
                             )}
                         />
 
                         <div className="pt-2 space-y-3">
-                            <form.SubmitButton>Sign in</form.SubmitButton>
+                            <form.SubmitButton>Create account</form.SubmitButton>
 
                             <p className="text-center text-sm text-muted-foreground">
-                                Don&apos;t have an account?{" "}
+                                Already have an account?{" "}
                                 <Link
-                                    href="/register"
+                                    href="/login"
                                     className="text-foreground underline hover:text-foreground/80"
                                 >
-                                    Register
+                                    Sign in
                                 </Link>
                             </p>
                         </div>

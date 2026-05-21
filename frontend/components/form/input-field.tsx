@@ -12,6 +12,8 @@ interface InputFieldProps {
     type?: "text" | "email" | "password";
     placeholder?: string;
     autoComplete?: string;
+    required?: boolean;
+    desc?: string;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -26,6 +28,8 @@ export function InputField({
     type = "text",
     placeholder,
     autoComplete,
+    required,
+    desc,
 }: InputFieldProps) {
     const field = useFieldContext<string>();
     const errors = field.state.meta.errors;
@@ -36,7 +40,9 @@ export function InputField({
 
     return (
         <div className="space-y-1.5">
-            <Label htmlFor={field.name}>{label}</Label>
+            <Label htmlFor={field.name}>
+                <span>{label}{required && <span className="ml-0.5 text-destructive">*</span>}</span>
+            </Label>
             <div className="relative">
                 <Input
                     id={field.name}
@@ -73,6 +79,12 @@ export function InputField({
                     {getErrorMessage(errors[0])}
                 </p>
             )}
+            {desc && errors.length == 0 && (
+                <p className="text-[0.8rem] text-muted-foreground">
+                    {desc}
+                </p>
+            )
+            }
         </div>
     );
 }
