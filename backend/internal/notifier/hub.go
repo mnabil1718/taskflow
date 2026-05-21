@@ -14,6 +14,7 @@ const (
 	EventTaskUpdated          EventType = "task.updated"
 	EventTaskDeleted          EventType = "task.deleted"
 	EventTaskAssigned         EventType = "task.assigned"
+	EventTaskMoved            EventType = "task.moved"
 	EventTaskDeadlineReminder EventType = "task.deadline_reminder"
 )
 

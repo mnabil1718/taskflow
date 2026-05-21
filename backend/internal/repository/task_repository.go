@@ -24,8 +24,10 @@ type TaskRepository interface {
 	Create(ctx context.Context, t *model.Task) error
 	GetByID(ctx context.Context, id string) (*model.Task, error)
 	List(ctx context.Context, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	BoardList(ctx context.Context, projectID string) ([]*model.Task, error)
 	Update(ctx context.Context, t *model.Task) error
 	UpdateAssignee(ctx context.Context, id string, assigneeID *string) error
+	Move(ctx context.Context, id string, newStatus model.TaskStatus, newPosition string) (*model.Task, model.TaskStatus, error)
 	Delete(ctx context.Context, id string) error
 	LogStatusChange(ctx context.Context, taskID string, changedBy *string, from, to model.TaskStatus) error
 	GetActivityLogs(ctx context.Context, taskID string) ([]*model.TaskActivityLog, error)
@@ -45,14 +47,15 @@ func NewTaskRepository(db *sql.DB) TaskRepository {
 
 func (r *taskRepository) Create(ctx context.Context, t *model.Task) error {
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO tasks (title, description, status, priority, project_id, assignee_id, created_by, due_date)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO tasks (title, description, status, priority, position, project_id, assignee_id, created_by, due_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
 	`,
 		t.Title,
 		nullableString(t.Description),
 		t.Status,
 		t.Priority,
+		t.Position,
 		t.ProjectID,
 		nullableUUID(t.AssigneeID),
 		nullableUUID(t.CreatedBy),
@@ -75,7 +78,7 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 	var dueDate sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, title, description, status, priority, project_id, assignee_id, created_by, due_date, created_at, updated_at
+		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
 		FROM tasks WHERE id = $1
 	`, id).Scan(
 		&t.ID,
@@ -83,6 +86,7 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 		&desc,
 		&t.Status,
 		&t.Priority,
+		&t.Position,
 		&t.ProjectID,
 		&assignee,
 		&creator,
@@ -157,7 +161,7 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	listArgs := append([]any{}, args...)
 	listArgs = append(listArgs, limit, offset)
 	listQuery := fmt.Sprintf(`
-		SELECT id, title, description, status, priority, project_id, assignee_id, created_by, due_date, created_at, updated_at
+		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
 		FROM tasks
 		WHERE %s
 		ORDER BY %s %s NULLS LAST, created_at DESC
@@ -172,41 +176,41 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 
 	tasks := make([]*model.Task, 0)
 	for rows.Next() {
-		t := &model.Task{}
-		var desc sql.NullString
-		var assignee, creator sql.NullString
-		var dueDate sql.NullTime
-		if err := rows.Scan(
-			&t.ID,
-			&t.Title,
-			&desc,
-			&t.Status,
-			&t.Priority,
-			&t.ProjectID,
-			&assignee,
-			&creator,
-			&dueDate,
-			&t.CreatedAt,
-			&t.UpdatedAt,
-		); err != nil {
+		t, err := scanTask(rows)
+		if err != nil {
 			return nil, 0, fmt.Errorf("scan task: %w", err)
-		}
-		if desc.Valid {
-			t.Description = desc.String
-		}
-		if assignee.Valid {
-			t.AssigneeID = &assignee.String
-		}
-		if creator.Valid {
-			t.CreatedBy = &creator.String
-		}
-		if dueDate.Valid {
-			t.DueDate = &dueDate.Time
 		}
 		tasks = append(tasks, t)
 	}
 
 	return tasks, total, rows.Err()
+}
+
+// BoardList returns every task in the project ordered by (status, position)
+// for the Kanban board. No pagination — boards are meant to render in one
+// shot, and the composite index (project_id, status, position) covers the
+// read.
+func (r *taskRepository) BoardList(ctx context.Context, projectID string) ([]*model.Task, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
+		FROM tasks
+		WHERE project_id = $1
+		ORDER BY status, position
+	`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("board list: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := make([]*model.Task, 0)
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
 }
 
 func (r *taskRepository) Update(ctx context.Context, t *model.Task) error {
@@ -241,6 +245,70 @@ func (r *taskRepository) Update(ctx context.Context, t *model.Task) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// Move updates status and position atomically and returns the refreshed
+// row along with the previous status — callers need the old status to
+// decide whether to write an activity log entry.
+func (r *taskRepository) Move(ctx context.Context, id string, newStatus model.TaskStatus, newPosition string) (*model.Task, model.TaskStatus, error) {
+	t := &model.Task{}
+	var desc sql.NullString
+	var assignee, creator sql.NullString
+	var dueDate sql.NullTime
+	var prevStatus model.TaskStatus
+
+	// Snapshot the pre-update status in a CTE so the caller can detect a
+	// cross-column move without a second round trip. The plain RETURNING
+	// clause only sees post-update values.
+	err := r.db.QueryRowContext(ctx, `
+		WITH old AS (
+		    SELECT status FROM tasks WHERE id = $3
+		), upd AS (
+		    UPDATE tasks
+		    SET status = $1,
+		        position = $2,
+		        updated_at = NOW()
+		    WHERE id = $3
+		    RETURNING id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
+		)
+		SELECT upd.id, upd.title, upd.description, upd.status, upd.priority, upd.position, upd.project_id, upd.assignee_id, upd.created_by, upd.due_date, upd.created_at, upd.updated_at, old.status
+		FROM upd, old
+	`, newStatus, newPosition, id).Scan(
+		&t.ID,
+		&t.Title,
+		&desc,
+		&t.Status,
+		&t.Priority,
+		&t.Position,
+		&t.ProjectID,
+		&assignee,
+		&creator,
+		&dueDate,
+		&t.CreatedAt,
+		&t.UpdatedAt,
+		&prevStatus,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, "", ErrNotFound
+		}
+		return nil, "", fmt.Errorf("move task: %w", err)
+	}
+
+	if desc.Valid {
+		t.Description = desc.String
+	}
+	if assignee.Valid {
+		t.AssigneeID = &assignee.String
+	}
+	if creator.Valid {
+		t.CreatedBy = &creator.String
+	}
+	if dueDate.Valid {
+		t.DueDate = &dueDate.Time
+	}
+
+	return t, prevStatus, nil
 }
 
 func (r *taskRepository) UpdateAssignee(ctx context.Context, id string, assigneeID *string) error {
@@ -321,7 +389,7 @@ func (r *taskRepository) PendingReminders(ctx context.Context, kind ReminderKind
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, title, description, status, priority, project_id, assignee_id, created_by, due_date, created_at, updated_at
+		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
 		FROM tasks
 		WHERE assignee_id IS NOT NULL
 		  AND status != 'done'
@@ -340,40 +408,52 @@ func (r *taskRepository) PendingReminders(ctx context.Context, kind ReminderKind
 
 	tasks := make([]*model.Task, 0)
 	for rows.Next() {
-		t := &model.Task{}
-		var desc sql.NullString
-		var assignee, creator sql.NullString
-		var dueDate sql.NullTime
-		if err := rows.Scan(
-			&t.ID,
-			&t.Title,
-			&desc,
-			&t.Status,
-			&t.Priority,
-			&t.ProjectID,
-			&assignee,
-			&creator,
-			&dueDate,
-			&t.CreatedAt,
-			&t.UpdatedAt,
-		); err != nil {
+		t, err := scanTask(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan pending reminder: %w", err)
-		}
-		if desc.Valid {
-			t.Description = desc.String
-		}
-		if assignee.Valid {
-			t.AssigneeID = &assignee.String
-		}
-		if creator.Valid {
-			t.CreatedBy = &creator.String
-		}
-		if dueDate.Valid {
-			t.DueDate = &dueDate.Time
 		}
 		tasks = append(tasks, t)
 	}
 	return tasks, rows.Err()
+}
+
+// scanTask reads one row from a SELECT that follows the canonical task
+// column order. Centralised so the column list and the nullable handling
+// stay in lockstep across List, BoardList, and PendingReminders.
+func scanTask(rows *sql.Rows) (*model.Task, error) {
+	t := &model.Task{}
+	var desc sql.NullString
+	var assignee, creator sql.NullString
+	var dueDate sql.NullTime
+	if err := rows.Scan(
+		&t.ID,
+		&t.Title,
+		&desc,
+		&t.Status,
+		&t.Priority,
+		&t.Position,
+		&t.ProjectID,
+		&assignee,
+		&creator,
+		&dueDate,
+		&t.CreatedAt,
+		&t.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	if desc.Valid {
+		t.Description = desc.String
+	}
+	if assignee.Valid {
+		t.AssigneeID = &assignee.String
+	}
+	if creator.Valid {
+		t.CreatedBy = &creator.String
+	}
+	if dueDate.Valid {
+		t.DueDate = &dueDate.Time
+	}
+	return t, nil
 }
 
 func (r *taskRepository) MarkReminderSent(ctx context.Context, taskID string, kind ReminderKind) error {

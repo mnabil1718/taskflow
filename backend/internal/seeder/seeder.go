@@ -106,12 +106,12 @@ func seedProjectMembers(tx *sql.Tx) error {
 
 func seedTasks(tx *sql.Tx) error {
 	_, err := tx.Exec(`
-		INSERT INTO tasks (id, title, description, status, priority, project_id, assignee_id, created_by) VALUES
-		($1, 'Set up CI/CD pipeline',      'Configure GitHub Actions workflows',   'todo',        'high',   $6, $8, $8),
-		($2, 'Design database schema',     'Create ER diagram and migrations',     'done',        'high',   $6, $8, $8),
-		($3, 'Implement auth endpoints',   'Register, login, refresh token flow',  'in_progress', 'high',   $6, $9, $8),
-		($4, 'Build dashboard UI',         'Task summary charts per project',      'todo',        'medium', $7, $9, $9),
-		($5, 'Write API documentation',    'Document all REST endpoints',          'todo',        'low',    $7, $8, $9)
+		INSERT INTO tasks (id, title, description, status, priority, position, project_id, assignee_id, created_by) VALUES
+		($1, 'Set up CI/CD pipeline',      'Configure GitHub Actions workflows',   'todo',        'high',   '00001000', $6, $8, $8),
+		($2, 'Design database schema',     'Create ER diagram and migrations',     'done',        'high',   '00001000', $6, $8, $8),
+		($3, 'Implement auth endpoints',   'Register, login, refresh token flow',  'in_progress', 'high',   '00001000', $6, $9, $8),
+		($4, 'Build dashboard UI',         'Task summary charts per project',      'todo',        'medium', '00001000', $7, $9, $9),
+		($5, 'Write API documentation',    'Document all REST endpoints',          'todo',        'low',    '00002000', $7, $8, $9)
 	`, task1ID, task2ID, task3ID, task4ID, task5ID,
 		project1ID, project2ID, user1ID, user2ID)
 	if err != nil {

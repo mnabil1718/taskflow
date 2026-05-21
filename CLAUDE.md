@@ -43,6 +43,12 @@ docker-compose.yml
 - Use proper HTTP status codes
 - JWT: access token (15min) + refresh token (7d)
 
+## Drag & Drop Technical Note
+
+For efficient and reliable ranking/ordering position for drag & drop list item,
+Atlassian comes up with Lexorank algorithm.
+TypeScript library example can be seen at @LEXORANK.md
+
 ## Git Workflow
 
 ### Branch strategy

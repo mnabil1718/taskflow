@@ -21,6 +21,7 @@ type Task struct {
 	Description string       `json:"description,omitempty" example:"Plug JWTProtected into the v1 router"`
 	Status      TaskStatus   `json:"status"                example:"todo"`
 	Priority    TaskPriority `json:"priority"              example:"medium"`
+	Position    string       `json:"position"              example:"00001000"`
 	ProjectID   string       `json:"project_id"            example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
 	AssigneeID  *string      `json:"assignee_id,omitempty" example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
 	CreatedBy   *string      `json:"created_by,omitempty"  example:"6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f"`
@@ -39,11 +40,15 @@ type TaskActivityLog struct {
 }
 
 type CreateTaskRequest struct {
-	Title       string       `json:"title"        example:"Wire up auth middleware"`
-	Description string       `json:"description"  example:"Plug JWTProtected into the v1 router"`
-	Priority    TaskPriority `json:"priority"     example:"high"`
-	AssigneeID  *string      `json:"assignee_id"  example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
-	DueDate     *time.Time   `json:"due_date"     example:"2026-06-01T17:00:00Z"`
+	Title       string       `json:"title"              example:"Wire up auth middleware"`
+	Description string       `json:"description"        example:"Plug JWTProtected into the v1 router"`
+	Priority    TaskPriority `json:"priority"           example:"high"`
+	// Optional Lexorank position. Send one only when creating from the Kanban
+	// board and you need exact placement; the data-table create flow can omit
+	// it and the server will default to end-of-column.
+	Position   string     `json:"position,omitempty" example:"00009000"`
+	AssigneeID *string    `json:"assignee_id"        example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
+	DueDate    *time.Time `json:"due_date"           example:"2026-06-01T17:00:00Z"`
 }
 
 type UpdateTaskRequest struct {
@@ -67,4 +72,21 @@ type TaskFilter struct {
 
 type AssignTaskRequest struct {
 	AssigneeID *string `json:"assignee_id" example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
+}
+
+// MoveTaskRequest is the payload sent by the Kanban board on drag & drop.
+// The client computes the new position string (Lexorank) so the server stays
+// a dumb persistence layer for ordering. Status may equal the current status
+// (in-column reorder) or differ (cross-column move).
+type MoveTaskRequest struct {
+	Status   TaskStatus `json:"status"   example:"in_progress"`
+	Position string     `json:"position" example:"0000h000"`
+}
+
+// BoardView is the response shape for the Kanban board endpoint:
+// tasks bucketed by status, each bucket already sorted by position.
+type BoardView struct {
+	Todo       []*Task `json:"todo"`
+	InProgress []*Task `json:"in_progress"`
+	Done       []*Task `json:"done"`
 }

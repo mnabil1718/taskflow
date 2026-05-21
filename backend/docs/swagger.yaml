@@ -48,6 +48,21 @@ definitions:
         example: f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd
         type: string
     type: object
+  model.BoardView:
+    properties:
+      done:
+        items:
+          $ref: '#/definitions/model.Task'
+        type: array
+      in_progress:
+        items:
+          $ref: '#/definitions/model.Task'
+        type: array
+      todo:
+        items:
+          $ref: '#/definitions/model.Task'
+        type: array
+    type: object
   model.CreateProjectRequest:
     properties:
       deadline:
@@ -71,6 +86,13 @@ definitions:
       due_date:
         example: "2026-06-01T17:00:00Z"
         type: string
+      position:
+        description: |-
+          Optional Lexorank position. Send one only when creating from the Kanban
+          board and you need exact placement; the data-table create flow can omit
+          it and the server will default to end-of-column.
+        example: "00009000"
+        type: string
       priority:
         allOf:
         - $ref: '#/definitions/model.TaskPriority'
@@ -87,6 +109,16 @@ definitions:
       password:
         example: password123
         type: string
+    type: object
+  model.MoveTaskRequest:
+    properties:
+      position:
+        example: 0000h000
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/model.TaskStatus'
+        example: in_progress
     type: object
   model.Project:
     properties:
@@ -198,6 +230,9 @@ definitions:
         type: string
       id:
         example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        type: string
+      position:
+        example: "00001000"
         type: string
       priority:
         allOf:
@@ -361,6 +396,7 @@ definitions:
     - task.updated
     - task.deleted
     - task.assigned
+    - task.moved
     - task.deadline_reminder
     type: string
     x-enum-varnames:
@@ -368,6 +404,7 @@ definitions:
     - EventTaskUpdated
     - EventTaskDeleted
     - EventTaskAssigned
+    - EventTaskMoved
     - EventTaskDeadlineReminder
   response.Body:
     properties:
@@ -874,6 +911,47 @@ paths:
       summary: Update a project
       tags:
       - projects
+  /projects/{id}/board:
+    get:
+      description: |-
+        Returns all tasks in the project grouped by status, with each column already
+        sorted by the Lexorank `position` string. The caller must be a project member.
+        Intended for the drag & drop board view — no pagination.
+      parameters:
+      - description: Project UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Board retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.BoardView'
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Project not found or caller is not a member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Get the Kanban board for a project
+      tags:
+      - tasks
   /projects/{id}/members:
     get:
       description: Returns all members of the project. Accessible to any project member.
@@ -1367,6 +1445,59 @@ paths:
       security:
       - BearerAuth: []
       summary: Assign or unassign a task
+      tags:
+      - tasks
+  /tasks/{taskID}/move:
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Updates a task's status and ordering position in one atomic write.
+        The client computes the new `position` string (Lexorank) before calling.
+        A status change is recorded in the task activity log; same-column reorders are not.
+      parameters:
+      - description: Task UUID
+        in: path
+        name: taskID
+        required: true
+        type: string
+      - description: New status + position
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.MoveTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task moved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Task'
+              type: object
+        "400":
+          description: Malformed body, invalid status, or invalid position
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Task not found or caller is not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Move a task on the Kanban board
       tags:
       - tasks
 schemes:

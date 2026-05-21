@@ -122,6 +122,31 @@ func (h *TaskHandler) List(c *fiber.Ctx) error {
 	})
 }
 
+// Board godoc
+// @Summary      Get the Kanban board for a project
+// @Description  Returns all tasks in the project grouped by status, with each column already
+// @Description  sorted by the Lexorank `position` string. The caller must be a project member.
+// @Description  Intended for the drag & drop board view — no pagination.
+// @Tags         tasks
+// @Produce      json
+// @Param        id   path     string                                  true "Project UUID"
+// @Success      200  {object} response.Body{data=model.BoardView}     "Board retrieved"
+// @Failure      401  {object} response.Body                           "Missing or invalid token"
+// @Failure      404  {object} response.Body                           "Project not found or caller is not a member"
+// @Failure      500  {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /projects/{id}/board [get]
+func (h *TaskHandler) Board(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	board, err := h.svc.Board(c.Context(), userID, c.Params("id"))
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "board retrieved", board)
+}
+
 // GetByID godoc
 // @Summary      Get a task
 // @Description  Returns a single task by ID. The caller must be a member of the task's project.
@@ -231,6 +256,39 @@ func (h *TaskHandler) Assign(c *fiber.Ctx) error {
 	}
 
 	return response.Success(c, fiber.StatusOK, "task assignee updated", task)
+}
+
+// Move godoc
+// @Summary      Move a task on the Kanban board
+// @Description  Updates a task's status and ordering position in one atomic write.
+// @Description  The client computes the new `position` string (Lexorank) before calling.
+// @Description  A status change is recorded in the task activity log; same-column reorders are not.
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        taskID  path     string                                  true "Task UUID"
+// @Param        request body     model.MoveTaskRequest                   true "New status + position"
+// @Success      200     {object} response.Body{data=model.Task}          "Task moved"
+// @Failure      400     {object} response.Body                           "Malformed body, invalid status, or invalid position"
+// @Failure      401     {object} response.Body                           "Missing or invalid token"
+// @Failure      404     {object} response.Body                           "Task not found or caller is not a project member"
+// @Failure      500     {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/{taskID}/move [patch]
+func (h *TaskHandler) Move(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	var req model.MoveTaskRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	task, err := h.svc.Move(c.Context(), userID, c.Params("taskID"), &req)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "task moved", task)
 }
 
 // GetActivityLogs godoc
