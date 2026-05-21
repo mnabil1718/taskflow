@@ -30,7 +30,7 @@ export function RegisterForm() {
                     email: value.email,
                     password: value.password,
                 });
-                router.push("/projects");
+                router.push("/dashboard");
             } catch (err) {
                 toast.error(
                     err instanceof ApiError

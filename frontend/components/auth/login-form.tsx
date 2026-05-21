@@ -26,7 +26,7 @@ export function LoginForm() {
         onSubmit: async ({ value }) => {
             try {
                 await login(value);
-                router.push("/projects");
+                router.push("/dashboard");
             } catch (err) {
                 toast.error(
                     err instanceof ApiError
