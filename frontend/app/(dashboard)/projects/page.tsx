@@ -17,8 +17,6 @@ import {
     ArrowDown,
     FolderOpen,
     Trash2,
-    ChevronLeft,
-    ChevronRight,
 } from "lucide-react";
 
 import { AppNavbar } from "@/components/app-navbar";
@@ -47,6 +45,7 @@ import {
 } from "@/components/ui/table";
 import { useProjects, useBulkDeleteProjects } from "@/hooks/use-projects";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
+import { PaginationControls } from "@/components/pagination-controls";
 import { formatDate } from "@/lib/date-utils";
 import type { Project, ProjectStatus } from "@/lib/types";
 
@@ -222,9 +221,10 @@ export default function ProjectsPage() {
                         {selectedCount > 0 && (
                             <Button
                                 variant="destructive"
-                                size="sm"
+                                size="lg"
                                 onClick={() => setConfirmOpen(true)}
                                 disabled={bulkDelete.isPending}
+                                className="px-4!"
                             >
                                 <Trash2 className="size-4" />
                                 Delete {selectedCount} selected
@@ -296,34 +296,14 @@ export default function ProjectsPage() {
                     </Card>
                 )}
 
-                {totalPages > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                            {selectedCount > 0 ? `${selectedCount} selected · ` : ""}
-                            Page {page} of {totalPages}
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page === 1 || isFetching}
-                            >
-                                <ChevronLeft className="size-4" />
-                                Previous
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={page >= totalPages || isFetching}
-                            >
-                                Next
-                                <ChevronRight className="size-4" />
-                            </Button>
-                        </div>
-                    </div>
-                )}
+                <PaginationControls
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    total={total}
+                    totalPages={totalPages}
+                    onPageChange={setPage}
+                    disabled={isFetching}
+                />
             </main>
 
             <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
