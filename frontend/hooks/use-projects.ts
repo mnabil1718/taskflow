@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { projectsApi } from "@/lib/api/projects";
-import type { ProjectListParams } from "@/lib/types";
+import type { CreateProjectRequest, ProjectListParams } from "@/lib/types";
 
 export const projectKeys = {
     all: ["projects"] as const,
@@ -35,6 +35,18 @@ export function useProjectMembers(id: string) {
         queryFn: () => projectsApi.getMembers(id),
         staleTime: 60 * 1000,
         enabled: !!id,
+    });
+}
+
+export function useCreateProject() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: CreateProjectRequest) => projectsApi.create(data),
+        onSuccess: (project) => {
+            qc.invalidateQueries({ queryKey: projectKeys.all });
+            qc.invalidateQueries({ queryKey: ["dashboard"] });
+            toast.success(`Project "${project.name}" created`);
+        },
     });
 }
 

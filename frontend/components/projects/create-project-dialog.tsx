@@ -1,0 +1,147 @@
+"use client";
+
+import { useState } from "react";
+import { Plus } from "lucide-react";
+
+import { useAppForm } from "@/lib/app-form";
+import { useCreateProject } from "@/hooks/use-projects";
+import { createProjectSchema } from "@/schemas/project.schema";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+
+// Today as YYYY-MM-DD in the user's local timezone — used as the min for the
+// deadline picker so we don't allow scheduling in the past.
+function todayLocalISODate(): string {
+    const d = new Date();
+    const tzOffsetMs = d.getTimezoneOffset() * 60_000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 10);
+}
+
+export function CreateProjectDialog() {
+    const [open, setOpen] = useState(false);
+    const createProject = useCreateProject();
+
+    const form = useAppForm({
+        defaultValues: { name: "", description: "", deadline: "" },
+        onSubmit: async ({ value, formApi }) => {
+            try {
+                await createProject.mutateAsync({
+                    name: value.name.trim(),
+                    description: value.description.trim() || undefined,
+                    // <input type="date"> emits YYYY-MM-DD; backend wants RFC3339.
+                    deadline: value.deadline
+                        ? new Date(`${value.deadline}T00:00:00Z`).toISOString()
+                        : undefined,
+                });
+                formApi.reset();
+                setOpen(false);
+            } catch {
+                // toasted by api interceptor
+            }
+        },
+    });
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                if (!next) form.reset();
+            }}
+        >
+            <DialogTrigger
+                render={
+                    <Button size="sm">
+                        <Plus className="size-4" />
+                        New Project
+                    </Button>
+                }
+            />
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Create project</DialogTitle>
+                    <DialogDescription>
+                        Give your project a name. You can update details later.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form.AppForm>
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            form.handleSubmit();
+                        }}
+                        className="space-y-4"
+                    >
+                        <form.AppField
+                            name="name"
+                            validators={{
+                                onChange: createProjectSchema.shape.name,
+                                onBlur: createProjectSchema.shape.name,
+                            }}
+                            children={(field) => (
+                                <field.InputField
+                                    label="Name"
+                                    placeholder="e.g. Q4 Roadmap"
+                                    autoComplete="off"
+                                    required
+                                />
+                            )}
+                        />
+
+                        <form.AppField
+                            name="description"
+                            validators={{
+                                onChange: createProjectSchema.shape.description,
+                                onBlur: createProjectSchema.shape.description,
+                            }}
+                            children={(field) => (
+                                <field.TextareaField
+                                    label="Description"
+                                    placeholder="What is this project about?"
+                                    rows={3}
+                                />
+                            )}
+                        />
+
+                        <form.AppField
+                            name="deadline"
+                            validators={{
+                                onChange: createProjectSchema.shape.deadline,
+                                onBlur: createProjectSchema.shape.deadline,
+                            }}
+                            children={(field) => (
+                                <field.InputField
+                                    label="Deadline"
+                                    type="date"
+                                    min={todayLocalISODate()}
+                                    desc="Optional — leave blank for none"
+                                />
+                            )}
+                        />
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setOpen(false)}
+                                disabled={createProject.isPending}
+                            >
+                                Cancel
+                            </Button>
+                            <form.SubmitButton className="sm:w-auto">Create</form.SubmitButton>
+                        </DialogFooter>
+                    </form>
+                </form.AppForm>
+            </DialogContent>
+        </Dialog>
+    );
+}

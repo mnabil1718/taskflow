@@ -46,6 +46,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useProjects, useBulkDeleteProjects } from "@/hooks/use-projects";
+import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import type { Project, ProjectStatus } from "@/lib/types";
 
 const PAGE_SIZE = 10;
@@ -221,17 +222,20 @@ export default function ProjectsPage() {
                             {isLoading ? "Loading…" : `${total} project${total === 1 ? "" : "s"}`}
                         </p>
                     </div>
-                    {selectedCount > 0 && (
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => setConfirmOpen(true)}
-                            disabled={bulkDelete.isPending}
-                        >
-                            <Trash2 className="size-4" />
-                            Delete {selectedCount} selected
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {selectedCount > 0 && (
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => setConfirmOpen(true)}
+                                disabled={bulkDelete.isPending}
+                            >
+                                <Trash2 className="size-4" />
+                                Delete {selectedCount} selected
+                            </Button>
+                        )}
+                        <CreateProjectDialog />
+                    </div>
                 </div>
 
                 {isLoading ? (
