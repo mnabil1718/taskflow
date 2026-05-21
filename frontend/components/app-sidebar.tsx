@@ -22,6 +22,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
     sidebarMenuButtonVariants,
+    useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
@@ -42,6 +43,11 @@ const navItems = [
 export function AppSidebar() {
     const pathname = usePathname();
     const { user, logout } = useAuth();
+    const { isMobile, setOpenMobile } = useSidebar();
+
+    const handleNavigate = () => {
+        if (isMobile) setOpenMobile(false);
+    };
 
     const initials = user?.email
         ? user.email.slice(0, 2).toUpperCase()
@@ -52,7 +58,7 @@ export function AppSidebar() {
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" render={<Link href="/dashboard" />}>
+                        <SidebarMenuButton size="lg" render={<Link href="/dashboard" onClick={handleNavigate} />}>
                             <span className="font-mono text-base font-bold tracking-tighter">TF</span>
                             <span className="font-mono text-base font-bold tracking-tighter">TaskFlow</span>
                         </SidebarMenuButton>
@@ -68,7 +74,7 @@ export function AppSidebar() {
                             {navItems.map((item) => (
                                 <SidebarMenuItem key={item.href}>
                                     <SidebarMenuButton
-                                        render={<Link href={item.href} />}
+                                        render={<Link href={item.href} onClick={handleNavigate} />}
                                         isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
                                         tooltip={item.title}
                                     >

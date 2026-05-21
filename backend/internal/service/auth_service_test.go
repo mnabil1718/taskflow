@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +60,24 @@ func (m *mockUserRepo) GetByID(_ context.Context, id string) (*model.User, error
 		return nil, repository.ErrNotFound
 	}
 	return u, nil
+}
+
+func (m *mockUserRepo) Search(_ context.Context, query, excludeID string, limit int) ([]*model.User, error) {
+	out := make([]*model.User, 0)
+	for _, u := range m.byID {
+		if u.ID == excludeID {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(u.Name), strings.ToLower(query)) &&
+			!strings.Contains(strings.ToLower(u.Email), strings.ToLower(query)) {
+			continue
+		}
+		out = append(out, u)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
 }
 
 type mockTokenRepo struct {

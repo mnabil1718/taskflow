@@ -9,11 +9,12 @@ import { cn } from "@/lib/utils";
 
 interface InputFieldProps {
     label: string;
-    type?: "text" | "email" | "password";
+    type?: "text" | "email" | "password" | "date";
     placeholder?: string;
     autoComplete?: string;
     required?: boolean;
     desc?: string;
+    min?: string;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -30,6 +31,7 @@ export function InputField({
     autoComplete,
     required,
     desc,
+    min,
 }: InputFieldProps) {
     const field = useFieldContext<string>();
     const errors = field.state.meta.errors;
@@ -50,6 +52,7 @@ export function InputField({
                     type={resolvedType}
                     placeholder={placeholder}
                     autoComplete={autoComplete}
+                    min={min}
                     value={field.state.value}
                     onChange={(e) => field.handleChange(e.target.value)}
                     onBlur={field.handleBlur}

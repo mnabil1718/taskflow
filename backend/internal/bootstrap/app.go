@@ -15,7 +15,7 @@ import (
 	"github.com/mnabil1718/taskflow/internal/service"
 )
 
-func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler) *fiber.App {
+func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler, user *handler.UserHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ReadBufferSize: 16 * 1024,
 	})
@@ -35,7 +35,7 @@ func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.Hea
 		},
 	}))
 
-	registerRoutes(app, authSvc, health, auth, project, task, dashboard, notif)
+	registerRoutes(app, authSvc, health, auth, project, task, dashboard, notif, user)
 	return app
 }
 
@@ -52,7 +52,7 @@ func rateLimiter(max int, expiration time.Duration) fiber.Handler {
 	})
 }
 
-func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler) {
+func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler, user *handler.UserHandler) {
 	app.Get("/health", health.Check)
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
@@ -71,6 +71,7 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 	projects := protected.Group("/projects")
 	projects.Post("", project.Create)
 	projects.Get("", project.List)
+	projects.Post("/bulk-delete", project.BulkDelete)
 	projects.Get("/:id", project.GetByID)
 	projects.Put("/:id", project.Update)
 	projects.Delete("/:id", project.Delete)
@@ -96,4 +97,7 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 
 	notifications := protected.Group("/notifications")
 	notifications.Get("/stream", notif.Stream)
+
+	users := protected.Group("/users")
+	users.Get("/search", user.Search)
 }

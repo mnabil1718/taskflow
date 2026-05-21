@@ -23,10 +23,13 @@ type ProjectService interface {
 	List(ctx context.Context, userID string, page, limit int) ([]*model.Project, int, error)
 	Update(ctx context.Context, userID, projectID string, req *model.UpdateProjectRequest) (*model.Project, error)
 	Delete(ctx context.Context, userID, projectID string) error
+	BulkDelete(ctx context.Context, userID string, ids []string) (int, error)
 	AddMember(ctx context.Context, ownerID, projectID string, req *model.AddMemberRequest) (*model.ProjectMember, error)
 	RemoveMember(ctx context.Context, ownerID, projectID, targetUserID string) error
 	GetMembers(ctx context.Context, userID, projectID string) ([]*model.ProjectMember, error)
 }
+
+const bulkDeleteMaxIDs = 100
 
 type projectService struct {
 	projectRepo repository.ProjectRepository
@@ -42,6 +45,11 @@ func (s *projectService) Create(ctx context.Context, ownerID string, req *model.
 		return nil, err
 	}
 
+	invites, err := s.normalizeInvites(ctx, ownerID, req.Members)
+	if err != nil {
+		return nil, err
+	}
+
 	p := &model.Project{
 		Name:        req.Name,
 		Description: req.Description,
@@ -50,11 +58,57 @@ func (s *projectService) Create(ctx context.Context, ownerID string, req *model.
 		OwnerID:     ownerID,
 	}
 
-	if err := s.projectRepo.Create(ctx, p); err != nil {
+	if err := s.projectRepo.Create(ctx, p, invites); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrUserNotFound
+		}
 		return nil, err
 	}
 
 	return p, nil
+}
+
+// normalizeInvites validates each invite (role defaults to "member",
+// duplicate user_ids collapse, owner is filtered out, and every referenced
+// user must exist) so the repo layer can trust the slice it receives.
+func (s *projectService) normalizeInvites(ctx context.Context, ownerID string, raw []model.ProjectMemberInvite) ([]model.ProjectMemberInvite, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]model.ProjectMemberInvite, 0, len(raw))
+
+	for _, inv := range raw {
+		if inv.UserID == "" {
+			return nil, fmt.Errorf("%w: invite user_id is required", ErrValidation)
+		}
+		if inv.UserID == ownerID {
+			continue
+		}
+		if _, dup := seen[inv.UserID]; dup {
+			continue
+		}
+		seen[inv.UserID] = struct{}{}
+
+		role := inv.Role
+		if role == "" {
+			role = model.ProjectRoleMember
+		}
+		if role != model.ProjectRoleAdmin && role != model.ProjectRoleMember {
+			return nil, fmt.Errorf("%w: invite role must be 'admin' or 'member'", ErrValidation)
+		}
+
+		if _, err := s.userRepo.GetByID(ctx, inv.UserID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return nil, ErrUserNotFound
+			}
+			return nil, err
+		}
+
+		out = append(out, model.ProjectMemberInvite{UserID: inv.UserID, Role: role})
+	}
+	return out, nil
 }
 
 func (s *projectService) GetByID(ctx context.Context, userID, projectID string) (*model.Project, error) {
@@ -124,6 +178,25 @@ func (s *projectService) Delete(ctx context.Context, userID, projectID string) e
 	}
 
 	return s.projectRepo.Delete(ctx, projectID)
+}
+
+// BulkDelete soft-deletes every project in ids that the caller owns. IDs
+// belonging to projects the caller does not own — or that don't exist — are
+// silently skipped so the operation stays idempotent. Returns the number of
+// projects actually deleted.
+func (s *projectService) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("%w: ids is required", ErrValidation)
+	}
+	if len(ids) > bulkDeleteMaxIDs {
+		return 0, fmt.Errorf("%w: at most %d ids per request", ErrValidation, bulkDeleteMaxIDs)
+	}
+	for _, id := range ids {
+		if id == "" {
+			return 0, fmt.Errorf("%w: ids must not contain empty values", ErrValidation)
+		}
+	}
+	return s.projectRepo.BulkSoftDelete(ctx, userID, ids)
 }
 
 func (s *projectService) AddMember(ctx context.Context, ownerID, projectID string, req *model.AddMemberRequest) (*model.ProjectMember, error) {

@@ -33,7 +33,7 @@ func newMockProjectRepo() *mockProjectRepo {
 	}
 }
 
-func (m *mockProjectRepo) Create(_ context.Context, p *model.Project) error {
+func (m *mockProjectRepo) Create(_ context.Context, p *model.Project, invites []model.ProjectMemberInvite) error {
 	if m.createErr != nil {
 		return m.createErr
 	}
@@ -51,6 +51,21 @@ func (m *mockProjectRepo) Create(_ context.Context, p *model.Project) error {
 		UserID:    p.OwnerID,
 		Role:      model.ProjectRoleOwner,
 		JoinedAt:  time.Now(),
+	}
+
+	for _, inv := range invites {
+		if inv.UserID == p.OwnerID {
+			continue
+		}
+		if _, exists := m.members[p.ID][inv.UserID]; exists {
+			continue
+		}
+		m.members[p.ID][inv.UserID] = &model.ProjectMember{
+			ProjectID: p.ID,
+			UserID:    inv.UserID,
+			Role:      inv.Role,
+			JoinedAt:  time.Now(),
+		}
 	}
 	return nil
 }
@@ -100,6 +115,20 @@ func (m *mockProjectRepo) Delete(_ context.Context, id string) error {
 	delete(m.projects, id)
 	delete(m.members, id)
 	return nil
+}
+
+func (m *mockProjectRepo) BulkSoftDelete(_ context.Context, ownerID string, ids []string) (int, error) {
+	count := 0
+	for _, id := range ids {
+		p, ok := m.projects[id]
+		if !ok || p.OwnerID != ownerID {
+			continue
+		}
+		delete(m.projects, id)
+		delete(m.members, id)
+		count++
+	}
+	return count, nil
 }
 
 func (m *mockProjectRepo) AddMember(_ context.Context, projectID, userID string, role model.ProjectRole) error {

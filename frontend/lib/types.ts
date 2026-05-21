@@ -62,6 +62,12 @@ export interface CreateProjectRequest {
   name: string;
   description?: string;
   deadline?: string;
+  members?: ProjectMemberInvite[];
+}
+
+export interface ProjectMemberInvite {
+  user_id: string;
+  role: ProjectRole;
 }
 
 export interface UpdateProjectRequest {
@@ -74,6 +80,23 @@ export interface UpdateProjectRequest {
 export interface AddMemberRequest {
   user_id: string;
   role: ProjectRole;
+}
+
+export interface ProjectPage {
+  items: Project[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface ProjectListParams {
+  page?: number;
+  limit?: number;
+}
+
+export interface BulkDeleteProjectsResponse {
+  deleted_count: number;
 }
 
 // Task
