@@ -9,7 +9,7 @@ import {
 } from "react";
 import { authApi } from "./api/auth";
 import { tokenStorage } from "./token";
-import type { LoginRequest } from "./types";
+import type { LoginRequest, RegisterRequest } from "./types";
 
 interface AuthUser {
   id: string;
@@ -20,6 +20,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   login: (data: LoginRequest) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -60,13 +61,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(userFromToken(tokens.access_token));
   }, []);
 
+  const register = useCallback(async (data: RegisterRequest) => {
+    const tokens = await authApi.register(data);
+    setUser(userFromToken(tokens.access_token));
+  }, []);
+
   const logout = useCallback(async () => {
     await authApi.logout();
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
