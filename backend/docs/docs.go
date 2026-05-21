@@ -732,6 +732,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/projects/{id}/board": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all tasks in the project grouped by status, with each column already\nsorted by the Lexorank ` + "`" + `position` + "`" + ` string. The caller must be a project member.\nIntended for the drag \u0026 drop board view — no pagination.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Get the Kanban board for a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Board retrieved",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.BoardView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found or caller is not a member",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/projects/{id}/members": {
             "get": {
                 "security": [
@@ -1502,6 +1566,88 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/tasks/{taskID}/move": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates a task's status and ordering position in one atomic write.\nThe client computes the new ` + "`" + `position` + "`" + ` string (Lexorank) before calling.\nA status change is recorded in the task activity log; same-column reorders are not.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Move a task on the Kanban board",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task UUID",
+                        "name": "taskID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New status + position",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.MoveTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Task moved",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Task"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Malformed body, invalid status, or invalid position",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found or caller is not a project member",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1575,6 +1721,29 @@ const docTemplate = `{
                 }
             }
         },
+        "model.BoardView": {
+            "type": "object",
+            "properties": {
+                "done": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Task"
+                    }
+                },
+                "in_progress": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Task"
+                    }
+                },
+                "todo": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Task"
+                    }
+                }
+            }
+        },
         "model.CreateProjectRequest": {
             "type": "object",
             "properties": {
@@ -1607,6 +1776,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2026-06-01T17:00:00Z"
                 },
+                "position": {
+                    "description": "Optional Lexorank position. Send one only when creating from the Kanban\nboard and you need exact placement; the data-table create flow can omit\nit and the server will default to end-of-column.",
+                    "type": "string",
+                    "example": "00009000"
+                },
                 "priority": {
                     "allOf": [
                         {
@@ -1631,6 +1805,23 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "example": "password123"
+                }
+            }
+        },
+        "model.MoveTaskRequest": {
+            "type": "object",
+            "properties": {
+                "position": {
+                    "type": "string",
+                    "example": "0000h000"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.TaskStatus"
+                        }
+                    ],
+                    "example": "in_progress"
                 }
             }
         },
@@ -1791,6 +1982,10 @@ const docTemplate = `{
                 "id": {
                     "type": "string",
                     "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                },
+                "position": {
+                    "type": "string",
+                    "example": "00001000"
                 },
                 "priority": {
                     "allOf": [
@@ -2040,6 +2235,7 @@ const docTemplate = `{
                 "task.updated",
                 "task.deleted",
                 "task.assigned",
+                "task.moved",
                 "task.deadline_reminder"
             ],
             "x-enum-varnames": [
@@ -2047,6 +2243,7 @@ const docTemplate = `{
                 "EventTaskUpdated",
                 "EventTaskDeleted",
                 "EventTaskAssigned",
+                "EventTaskMoved",
                 "EventTaskDeadlineReminder"
             ]
         },

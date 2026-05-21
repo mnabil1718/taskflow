@@ -20,7 +20,9 @@ type TaskService interface {
 	Create(ctx context.Context, userID, projectID string, req *model.CreateTaskRequest) (*model.Task, error)
 	GetByID(ctx context.Context, userID, taskID string) (*model.Task, error)
 	List(ctx context.Context, userID, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	Board(ctx context.Context, userID, projectID string) (*model.BoardView, error)
 	Update(ctx context.Context, userID, taskID string, req *model.UpdateTaskRequest) (*model.Task, error)
+	Move(ctx context.Context, userID, taskID string, req *model.MoveTaskRequest) (*model.Task, error)
 	Delete(ctx context.Context, userID, taskID string) error
 	Assign(ctx context.Context, userID, taskID string, req *model.AssignTaskRequest) (*model.Task, error)
 	GetActivityLogs(ctx context.Context, userID, taskID string) ([]*model.TaskActivityLog, error)
@@ -86,12 +88,22 @@ func (s *taskService) Create(ctx context.Context, userID, projectID string, req 
 		priority = model.TaskPriorityMedium
 	}
 
+	// position is required at the column level, but the client only needs
+	// to compute one when it cares about exact placement on the Kanban board.
+	// For the primary data-table flow we default to a monotone time-based
+	// string so the new task naturally sorts at the end of its column.
+	position := req.Position
+	if position == "" {
+		position = defaultPosition()
+	}
+
 	creator := userID
 	t := &model.Task{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      model.TaskStatusTodo,
 		Priority:    priority,
+		Position:    position,
 		ProjectID:   projectID,
 		AssigneeID:  normalizeUUIDPtr(req.AssigneeID),
 		CreatedBy:   &creator,
@@ -156,6 +168,94 @@ func (s *taskService) List(ctx context.Context, userID, projectID string, filter
 	}
 
 	return s.taskRepo.List(ctx, projectID, filter)
+}
+
+func (s *taskService) Board(ctx context.Context, userID, projectID string) (*model.BoardView, error) {
+	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, err
+	}
+
+	isMember, err := s.projectRepo.IsMember(ctx, projectID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, ErrProjectNotFound
+	}
+
+	tasks, err := s.taskRepo.BoardList(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	view := &model.BoardView{
+		Todo:       make([]*model.Task, 0),
+		InProgress: make([]*model.Task, 0),
+		Done:       make([]*model.Task, 0),
+	}
+	for _, t := range tasks {
+		switch t.Status {
+		case model.TaskStatusTodo:
+			view.Todo = append(view.Todo, t)
+		case model.TaskStatusInProgress:
+			view.InProgress = append(view.InProgress, t)
+		case model.TaskStatusDone:
+			view.Done = append(view.Done, t)
+		}
+	}
+	return view, nil
+}
+
+func (s *taskService) Move(ctx context.Context, userID, taskID string, req *model.MoveTaskRequest) (*model.Task, error) {
+	t, err := s.taskRepo.GetByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, err
+	}
+
+	isMember, err := s.projectRepo.IsMember(ctx, t.ProjectID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, ErrTaskNotFound
+	}
+
+	if !isValidTaskStatus(req.Status) {
+		return nil, fmt.Errorf("%w: status must be 'todo', 'in_progress', or 'done'", ErrValidation)
+	}
+	if !isValidPosition(req.Position) {
+		return nil, fmt.Errorf("%w: position is required and must be ASCII printable", ErrValidation)
+	}
+
+	updated, prevStatus, err := s.taskRepo.Move(ctx, taskID, req.Status, req.Position)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, err
+	}
+
+	if prevStatus != updated.Status {
+		changedBy := userID
+		if err := s.taskRepo.LogStatusChange(ctx, updated.ID, &changedBy, prevStatus, updated.Status); err != nil {
+			return nil, err
+		}
+	}
+
+	s.notify(ctx, updated.ProjectID, notifier.Event{
+		Type:      notifier.EventTaskMoved,
+		TaskID:    updated.ID,
+		ProjectID: updated.ProjectID,
+		Task:      updated,
+	})
+
+	return updated, nil
 }
 
 func (s *taskService) Update(ctx context.Context, userID, taskID string, req *model.UpdateTaskRequest) (*model.Task, error) {
@@ -350,6 +450,12 @@ func validateCreateTask(req *model.CreateTaskRequest) error {
 	if req.Priority != "" && !isValidTaskPriority(req.Priority) {
 		return fmt.Errorf("%w: priority must be 'low', 'medium', or 'high'", ErrValidation)
 	}
+	// Position is optional on create — server defaults it. But if the client
+	// does send one (Kanban-create flow), it must be well-formed so it can't
+	// poison the (project_id, status, position) ordering.
+	if req.Position != "" && !isValidPosition(req.Position) {
+		return fmt.Errorf("%w: position must be ASCII printable", ErrValidation)
+	}
 	return nil
 }
 
@@ -383,6 +489,31 @@ func isValidTaskPriority(p model.TaskPriority) bool {
 		return true
 	}
 	return false
+}
+
+// isValidPosition guards the position string at the API boundary. The client
+// computes Lexorank, but the server still rejects empty or non-printable
+// values so a malformed payload can't poison the (project_id, status, position)
+// index ordering.
+func isValidPosition(p string) bool {
+	if p == "" || len(p) > 255 {
+		return false
+	}
+	for _, r := range p {
+		if r < 0x21 || r > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+// defaultPosition produces a monotone time-based position string for tasks
+// created without an explicit position. Nanoseconds since epoch zero-padded
+// to a fixed width sorts lexicographically the same as chronologically, so
+// new tasks land at the end of their column. The Kanban client's Lexorank
+// can still insert *between* two of these (e.g. by adding suffix chars).
+func defaultPosition() string {
+	return fmt.Sprintf("%020d", time.Now().UTC().UnixNano())
 }
 
 func normalizeUUIDPtr(s *string) *string {
