@@ -45,6 +45,11 @@ func (s *projectService) Create(ctx context.Context, ownerID string, req *model.
 		return nil, err
 	}
 
+	invites, err := s.normalizeInvites(ctx, ownerID, req.Members)
+	if err != nil {
+		return nil, err
+	}
+
 	p := &model.Project{
 		Name:        req.Name,
 		Description: req.Description,
@@ -53,11 +58,57 @@ func (s *projectService) Create(ctx context.Context, ownerID string, req *model.
 		OwnerID:     ownerID,
 	}
 
-	if err := s.projectRepo.Create(ctx, p); err != nil {
+	if err := s.projectRepo.Create(ctx, p, invites); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrUserNotFound
+		}
 		return nil, err
 	}
 
 	return p, nil
+}
+
+// normalizeInvites validates each invite (role defaults to "member",
+// duplicate user_ids collapse, owner is filtered out, and every referenced
+// user must exist) so the repo layer can trust the slice it receives.
+func (s *projectService) normalizeInvites(ctx context.Context, ownerID string, raw []model.ProjectMemberInvite) ([]model.ProjectMemberInvite, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]model.ProjectMemberInvite, 0, len(raw))
+
+	for _, inv := range raw {
+		if inv.UserID == "" {
+			return nil, fmt.Errorf("%w: invite user_id is required", ErrValidation)
+		}
+		if inv.UserID == ownerID {
+			continue
+		}
+		if _, dup := seen[inv.UserID]; dup {
+			continue
+		}
+		seen[inv.UserID] = struct{}{}
+
+		role := inv.Role
+		if role == "" {
+			role = model.ProjectRoleMember
+		}
+		if role != model.ProjectRoleAdmin && role != model.ProjectRoleMember {
+			return nil, fmt.Errorf("%w: invite role must be 'admin' or 'member'", ErrValidation)
+		}
+
+		if _, err := s.userRepo.GetByID(ctx, inv.UserID); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return nil, ErrUserNotFound
+			}
+			return nil, err
+		}
+
+		out = append(out, model.ProjectMemberInvite{UserID: inv.UserID, Role: role})
+	}
+	return out, nil
 }
 
 func (s *projectService) GetByID(ctx context.Context, userID, projectID string) (*model.Project, error) {

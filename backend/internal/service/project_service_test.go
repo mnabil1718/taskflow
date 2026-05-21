@@ -33,7 +33,7 @@ func newMockProjectRepo() *mockProjectRepo {
 	}
 }
 
-func (m *mockProjectRepo) Create(_ context.Context, p *model.Project) error {
+func (m *mockProjectRepo) Create(_ context.Context, p *model.Project, invites []model.ProjectMemberInvite) error {
 	if m.createErr != nil {
 		return m.createErr
 	}
@@ -51,6 +51,21 @@ func (m *mockProjectRepo) Create(_ context.Context, p *model.Project) error {
 		UserID:    p.OwnerID,
 		Role:      model.ProjectRoleOwner,
 		JoinedAt:  time.Now(),
+	}
+
+	for _, inv := range invites {
+		if inv.UserID == p.OwnerID {
+			continue
+		}
+		if _, exists := m.members[p.ID][inv.UserID]; exists {
+			continue
+		}
+		m.members[p.ID][inv.UserID] = &model.ProjectMember{
+			ProjectID: p.ID,
+			UserID:    inv.UserID,
+			Role:      inv.Role,
+			JoinedAt:  time.Now(),
+		}
 	}
 	return nil
 }

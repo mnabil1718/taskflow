@@ -14,7 +14,7 @@ import (
 var ErrDuplicateMember = errors.New("user is already a project member")
 
 type ProjectRepository interface {
-	Create(ctx context.Context, p *model.Project) error
+	Create(ctx context.Context, p *model.Project, invites []model.ProjectMemberInvite) error
 	GetByID(ctx context.Context, id string) (*model.Project, error)
 	List(ctx context.Context, userID string, page, limit int) ([]*model.Project, int, error)
 	Update(ctx context.Context, p *model.Project) error
@@ -35,7 +35,11 @@ func NewProjectRepository(db *sql.DB) ProjectRepository {
 	return &projectRepository{db: db}
 }
 
-func (r *projectRepository) Create(ctx context.Context, p *model.Project) error {
+// Create inserts a project, the owner membership, and any extra invites in a
+// single transaction. If any invitee references a missing user (FK 23503)
+// the whole project is rolled back so the caller can't end up with a
+// half-populated team.
+func (r *projectRepository) Create(ctx context.Context, p *model.Project, invites []model.ProjectMemberInvite) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -58,6 +62,25 @@ func (r *projectRepository) Create(ctx context.Context, p *model.Project) error 
 	`, p.ID, p.OwnerID)
 	if err != nil {
 		return fmt.Errorf("add owner to members: %w", err)
+	}
+
+	for _, inv := range invites {
+		// Skip self-invites silently — the owner row is already in.
+		if inv.UserID == p.OwnerID {
+			continue
+		}
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO project_members (project_id, user_id, role)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (project_id, user_id) DO NOTHING
+		`, p.ID, inv.UserID, inv.Role)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+				return ErrNotFound
+			}
+			return fmt.Errorf("add invitee %s: %w", inv.UserID, err)
+		}
 	}
 
 	return tx.Commit()
