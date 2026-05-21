@@ -21,7 +21,9 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    sidebarMenuButtonVariants,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -85,21 +87,19 @@ export function AppSidebar() {
                     <SidebarMenuItem>
                         <DropdownMenu>
                             <DropdownMenuTrigger
-                                render={
-                                    <SidebarMenuButton size="lg" tooltip="Account" />
-                                }
+                                className={cn(sidebarMenuButtonVariants({ size: "lg" }))}
                             >
                                 <Avatar className="size-8 rounded-lg">
                                     <AvatarFallback className="rounded-lg text-xs">
                                         {initials}
                                     </AvatarFallback>
                                 </Avatar>
-                                <div className="grid flex-1 text-left text-sm leading-tight">
+                                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                                     <span className="truncate font-medium">
                                         {user?.email ?? "user"}
                                     </span>
                                 </div>
-                                <ChevronsUpDown className="ml-auto size-4" />
+                                <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent side="top" className="min-w-56">
                                 <DropdownMenuItem onClick={logout}>
