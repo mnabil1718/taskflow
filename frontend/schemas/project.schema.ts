@@ -17,3 +17,9 @@ export const createProjectSchema = z.object({
       "Enter a valid date"
     ),
 });
+
+export const editProjectSchema = createProjectSchema.extend({
+  status: z.enum(["active", "archived"], {
+    message: "Pick a status",
+  }),
+});

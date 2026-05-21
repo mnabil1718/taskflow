@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { projectsApi } from "@/lib/api/projects";
-import type { CreateProjectRequest, ProjectListParams } from "@/lib/types";
+import type { CreateProjectRequest, ProjectListParams, UpdateProjectRequest } from "@/lib/types";
 
 export const projectKeys = {
     all: ["projects"] as const,
@@ -46,6 +46,32 @@ export function useCreateProject() {
             qc.invalidateQueries({ queryKey: projectKeys.all });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             toast.success(`Project "${project.name}" created`);
+        },
+    });
+}
+
+export function useUpdateProject() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: UpdateProjectRequest }) =>
+            projectsApi.update(id, data),
+        onSuccess: (project) => {
+            qc.invalidateQueries({ queryKey: projectKeys.all });
+            qc.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+            qc.invalidateQueries({ queryKey: ["dashboard"] });
+            toast.success(`Project "${project.name}" updated`);
+        },
+    });
+}
+
+export function useDeleteProject() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id: string) => projectsApi.delete(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: projectKeys.all });
+            qc.invalidateQueries({ queryKey: ["dashboard"] });
+            toast.success("Project deleted");
         },
     });
 }
