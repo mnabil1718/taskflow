@@ -82,12 +82,12 @@ export function MemberInvitePicker({
             <Label htmlFor="member-invite-input">{label}</Label>
 
             {value.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2 mt-3 mb-2">
                     {value.map((u) => (
                         <Badge
                             key={u.user_id}
                             variant="secondary"
-                            className="gap-1 pr-1 pl-2 py-1"
+                            className="gap-1 p-3!"
                         >
                             <span className="text-xs">{u.name}</span>
                             <button

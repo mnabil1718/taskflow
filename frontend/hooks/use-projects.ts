@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { projectsApi } from "@/lib/api/projects";
-import type { CreateProjectRequest, ProjectListParams, UpdateProjectRequest } from "@/lib/types";
+import type {
+    AddMemberRequest,
+    CreateProjectRequest,
+    ProjectListParams,
+    UpdateProjectRequest,
+} from "@/lib/types";
 
 export const projectKeys = {
     all: ["projects"] as const,
@@ -72,6 +77,26 @@ export function useDeleteProject() {
             qc.invalidateQueries({ queryKey: projectKeys.all });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             toast.success("Project deleted");
+        },
+    });
+}
+
+export function useAddMember(projectID: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: AddMemberRequest) => projectsApi.addMember(projectID, data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: projectKeys.members(projectID) });
+        },
+    });
+}
+
+export function useRemoveMember(projectID: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (userID: string) => projectsApi.removeMember(projectID, userID),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: projectKeys.members(projectID) });
         },
     });
 }
