@@ -76,11 +76,12 @@ export function FormDialog({
                     >
                         {children}
 
-                        <DialogFooter>
+                        <DialogFooter className="flex items-center gap-2">
                             <form.Subscribe selector={(state) => state.isSubmitting}>
                                 {(isSubmitting) => (
                                     <Button
                                         type="button"
+                                        size="lg"
                                         variant="outline"
                                         onClick={() => onOpenChange(false)}
                                         disabled={isSubmitting}
