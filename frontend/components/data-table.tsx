@@ -20,13 +20,18 @@ import {
 import { cn } from "@/lib/utils";
 
 // Column-level styling hooks. Consumers attach these via columnDef.meta so the
-// generic table can react to per-column layout decisions (width, alignment)
-// without hard-coding column ids.
+// generic table can react to per-column layout decisions (width, alignment,
+// truncation) without hard-coding column ids. Truncation is opt-in: a column
+// that needs ellipsis sets cellClassName: "max-w-xs" and cellInnerClassName:
+// "truncate". This avoids compressing columns with short content when
+// table-layout: auto distributes width.
 declare module "@tanstack/react-table" {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     interface ColumnMeta<TData extends unknown, TValue> {
         headerClassName?: string;
         cellClassName?: string;
+        headerInnerClassName?: string;
+        cellInnerClassName?: string;
     }
 }
 
@@ -56,7 +61,7 @@ export function DataTable<TData>({
         return (
             <Card>
                 <CardContent className="p-0">
-                    <Table>
+                    <Table className="min-w-max">
                         <TableHeader>
                             <TableRow>
                                 {columns.map((col) => (
@@ -108,26 +113,28 @@ export function DataTable<TData>({
                             <TableRow key={hg.id}>
                                 {hg.headers.map((header) => {
                                     const canSort = header.column.getCanSort();
-                                    const headerClassName = header.column.columnDef.meta?.headerClassName;
+                                    const meta = header.column.columnDef.meta;
                                     return (
-                                        <TableHead key={header.id} className={cn(headerClassName)}>
-                                            {header.isPlaceholder
-                                                ? null
-                                                : canSort ? (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="-ml-3 h-8"
-                                                        onClick={header.column.getToggleSortingHandler()}
-                                                    >
-                                                        {flexRender(header.column.columnDef.header, header.getContext())}
-                                                        <SortIcon isSorted={header.column.getIsSorted()} />
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-[0.8rem] font-medium">
-                                                        {flexRender(header.column.columnDef.header, header.getContext())}
-                                                    </span>
-                                                )}
+                                        <TableHead key={header.id} className={cn(meta?.headerClassName)}>
+                                            {header.isPlaceholder ? null : (
+                                                <div className={cn(meta?.headerInnerClassName)}>
+                                                    {canSort ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="-ml-3 h-8"
+                                                            onClick={header.column.getToggleSortingHandler()}
+                                                        >
+                                                            {flexRender(header.column.columnDef.header, header.getContext())}
+                                                            <SortIcon isSorted={header.column.getIsSorted()} />
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="text-[0.8rem] font-medium">
+                                                            {flexRender(header.column.columnDef.header, header.getContext())}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </TableHead>
                                     );
                                 })}
@@ -140,14 +147,19 @@ export function DataTable<TData>({
                                 key={row.id}
                                 data-state={row.getIsSelected() ? "selected" : undefined}
                             >
-                                {row.getVisibleCells().map((cell) => (
-                                    <TableCell
-                                        key={cell.id}
-                                        className={cn(cell.column.columnDef.meta?.cellClassName)}
-                                    >
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </TableCell>
-                                ))}
+                                {row.getVisibleCells().map((cell) => {
+                                    const meta = cell.column.columnDef.meta;
+                                    return (
+                                        <TableCell
+                                            key={cell.id}
+                                            className={cn(meta?.cellClassName)}
+                                        >
+                                            <div className={cn(meta?.cellInnerClassName)}>
+                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                            </div>
+                                        </TableCell>
+                                    );
+                                })}
                             </TableRow>
                         ))}
                     </TableBody>
