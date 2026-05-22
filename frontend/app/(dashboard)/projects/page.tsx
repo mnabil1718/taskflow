@@ -68,6 +68,10 @@ const columns = [
     }),
     columnHelper.accessor("name", {
         header: "Name",
+        meta: {
+            cellClassName: "max-w-xs",
+            cellInnerClassName: "truncate",
+        },
         cell: (info) => (
             <Link
                 href={`/projects/${info.row.original.id}`}
