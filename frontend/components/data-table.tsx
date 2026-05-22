@@ -20,10 +20,11 @@ import {
 import { cn } from "@/lib/utils";
 
 // Column-level styling hooks. Consumers attach these via columnDef.meta so the
-// generic table can react to per-column layout decisions (width, alignment)
-// without hard-coding column ids. *InnerClassName targets the truncating
-// wrapper inside the cell; the wrapper fills the cell width so truncation
-// happens exactly at the column edge.
+// generic table can react to per-column layout decisions (width, alignment,
+// truncation) without hard-coding column ids. Truncation is opt-in: a column
+// that needs ellipsis sets cellClassName: "max-w-xs" and cellInnerClassName:
+// "truncate". This avoids compressing columns with short content when
+// table-layout: auto distributes width.
 declare module "@tanstack/react-table" {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     interface ColumnMeta<TData extends unknown, TValue> {
@@ -33,12 +34,6 @@ declare module "@tanstack/react-table" {
         cellInnerClassName?: string;
     }
 }
-
-// Default cap on the <th>/<td>. overflow:hidden on the inner div lets the cell
-// honor max-width under table-layout: auto (its min-content becomes 0), so the
-// column actually shrinks to this bound when content is long.
-const DEFAULT_CELL = "max-w-xs";
-const DEFAULT_INNER = "truncate";
 
 interface DataTableProps<TData> {
     table: ReactTable<TData>;
@@ -66,7 +61,7 @@ export function DataTable<TData>({
         return (
             <Card>
                 <CardContent className="p-0">
-                    <Table>
+                    <Table className="min-w-max">
                         <TableHeader>
                             <TableRow>
                                 {columns.map((col) => (
@@ -120,19 +115,17 @@ export function DataTable<TData>({
                                     const canSort = header.column.getCanSort();
                                     const meta = header.column.columnDef.meta;
                                     return (
-                                        <TableHead key={header.id} className={cn(DEFAULT_CELL, meta?.headerClassName)}>
+                                        <TableHead key={header.id} className={cn(meta?.headerClassName)}>
                                             {header.isPlaceholder ? null : (
-                                                <div className={cn(DEFAULT_INNER, meta?.headerInnerClassName)}>
+                                                <div className={cn(meta?.headerInnerClassName)}>
                                                     {canSort ? (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="-ml-3 h-8 max-w-full"
+                                                            className="-ml-3 h-8"
                                                             onClick={header.column.getToggleSortingHandler()}
                                                         >
-                                                            <span className="truncate">
-                                                                {flexRender(header.column.columnDef.header, header.getContext())}
-                                                            </span>
+                                                            {flexRender(header.column.columnDef.header, header.getContext())}
                                                             <SortIcon isSorted={header.column.getIsSorted()} />
                                                         </Button>
                                                     ) : (
@@ -159,9 +152,9 @@ export function DataTable<TData>({
                                     return (
                                         <TableCell
                                             key={cell.id}
-                                            className={cn(DEFAULT_CELL, meta?.cellClassName)}
+                                            className={cn(meta?.cellClassName)}
                                         >
-                                            <div className={cn(DEFAULT_INNER, meta?.cellInnerClassName)}>
+                                            <div className={cn(meta?.cellInnerClassName)}>
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                             </div>
                                         </TableCell>

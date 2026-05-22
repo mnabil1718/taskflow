@@ -80,10 +80,12 @@ const columns = [
     columnHelper.accessor("description", {
         header: "Description",
         enableSorting: false,
+        meta: {
+            cellClassName: "max-w-xs",
+            cellInnerClassName: "truncate",
+        },
         cell: (info) => (
-            <span className="max-w-xs truncate text-muted-foreground">
-                {info.getValue() ?? "—"}
-            </span>
+            <span className="text-muted-foreground">{info.getValue() ?? "—"}</span>
         ),
     }),
     columnHelper.accessor("status", {
