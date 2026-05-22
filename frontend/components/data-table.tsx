@@ -22,8 +22,8 @@ import { cn } from "@/lib/utils";
 // Column-level styling hooks. Consumers attach these via columnDef.meta so the
 // generic table can react to per-column layout decisions (width, alignment)
 // without hard-coding column ids. *InnerClassName targets the truncating
-// wrapper inside the cell, so per-column max-widths/no-truncate overrides land
-// on the element that actually controls overflow.
+// wrapper inside the cell; the wrapper fills the cell width so truncation
+// happens exactly at the column edge.
 declare module "@tanstack/react-table" {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     interface ColumnMeta<TData extends unknown, TValue> {
@@ -34,9 +34,11 @@ declare module "@tanstack/react-table" {
     }
 }
 
-// Default cap for cell/header content. Long text truncates with ellipsis;
-// columns can opt out or resize via meta.cellInnerClassName.
-const DEFAULT_INNER = "max-w-xs truncate";
+// Default cap on the <th>/<td>. overflow:hidden on the inner div lets the cell
+// honor max-width under table-layout: auto (its min-content becomes 0), so the
+// column actually shrinks to this bound when content is long.
+const DEFAULT_CELL = "max-w-xs";
+const DEFAULT_INNER = "truncate";
 
 interface DataTableProps<TData> {
     table: ReactTable<TData>;
@@ -118,7 +120,7 @@ export function DataTable<TData>({
                                     const canSort = header.column.getCanSort();
                                     const meta = header.column.columnDef.meta;
                                     return (
-                                        <TableHead key={header.id} className={cn(meta?.headerClassName)}>
+                                        <TableHead key={header.id} className={cn(DEFAULT_CELL, meta?.headerClassName)}>
                                             {header.isPlaceholder ? null : (
                                                 <div className={cn(DEFAULT_INNER, meta?.headerInnerClassName)}>
                                                     {canSort ? (
@@ -157,7 +159,7 @@ export function DataTable<TData>({
                                     return (
                                         <TableCell
                                             key={cell.id}
-                                            className={cn(meta?.cellClassName)}
+                                            className={cn(DEFAULT_CELL, meta?.cellClassName)}
                                         >
                                             <div className={cn(DEFAULT_INNER, meta?.cellInnerClassName)}>
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
