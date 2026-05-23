@@ -3,7 +3,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { BoardFilters } from "@/components/kanban/board-filters";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { cn } from "@/lib/utils";
@@ -16,10 +16,10 @@ interface KanbanColumnProps {
     tasks: Task[];
     filter: BoardFilter;
     onFilterChange: (next: BoardFilter) => void;
-    /** True when the *effective* sort is "position" — the user is on
-     * manual order, so dragging cards around within the column is
-     * meaningful. Any other sort key turns the cards into a derived view
-     * where reordering by hand wouldn't survive a refetch. */
+    /** True when the *effective* sort is "position" AND the viewer is
+     * allowed to reorder. The cards still drag-render so cross-column
+     * drops keep working, but in-column reorders are blocked at drop
+     * time when this is false. */
     sortable: boolean;
 }
 
@@ -34,31 +34,28 @@ export function KanbanColumn({
     const { setNodeRef, isOver } = useDroppable({ id: status });
 
     return (
-        <Card
-            className={cn(
-                "flex flex-col gap-3 px-3 py-3 bg-muted/30 transition-colors",
-                isOver && "ring-2 ring-primary/40"
-            )}
-        >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0">
+        <Card className="flex flex-col gap-3 px-3 py-3 bg-muted/30">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold">{title}</h3>
                     <span className="text-xs text-muted-foreground tabular-nums">
                         {tasks.length}
                     </span>
                 </div>
-            </CardHeader>
+            </div>
 
             <BoardFilters scope="column" value={filter} onChange={onFilterChange} />
 
-            <CardContent
+            {/* The droppable ref must land on a real DOM node — wrapping
+                a div instead of using <CardContent> directly because the
+                shared CardContent function component doesn't forward
+                refs (React 18). The min-height keeps empty columns
+                accepting drops on their entire visible area. */}
+            <div
                 ref={setNodeRef}
                 className={cn(
-                    "flex-1 flex flex-col gap-2 p-0 min-h-32",
-                    // A bit of room at the bottom of the list so the user
-                    // can drop a card "below the last one" without having
-                    // to aim for a pixel-perfect strip.
-                    "pb-2"
+                    "flex-1 flex flex-col gap-2 min-h-32 pb-2 rounded-md transition-colors",
+                    isOver && "bg-primary/5 outline outline-2 outline-primary/40 outline-offset-2"
                 )}
             >
                 <SortableContext
@@ -66,8 +63,8 @@ export function KanbanColumn({
                     strategy={verticalListSortingStrategy}
                 >
                     {tasks.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic px-1">
-                            No tasks.
+                        <p className="text-xs text-muted-foreground italic px-1 py-2">
+                            {isOver ? "Drop here" : "No tasks."}
                         </p>
                     ) : (
                         tasks.map((task) => (
@@ -75,7 +72,7 @@ export function KanbanColumn({
                         ))
                     )}
                 </SortableContext>
-            </CardContent>
+            </div>
         </Card>
     );
 }

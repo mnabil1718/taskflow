@@ -22,7 +22,8 @@ import { BoardFilters } from "@/components/kanban/board-filters";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { KanbanColumn } from "@/components/kanban/kanban-column";
 import { useProject } from "@/hooks/use-projects";
-import { useBoard, useMoveTask } from "@/hooks/use-tasks";
+import { useBoard, useMoveTask, useUpdateTaskStatus } from "@/hooks/use-tasks";
+import { useAuth } from "@/lib/auth-context";
 import {
     DEFAULT_BOARD_FILTER,
     applyFilter,
@@ -66,6 +67,14 @@ export default function BoardPage() {
     const { data: project } = useProject(id);
     const { data: board, isLoading } = useBoard(id);
     const moveTask = useMoveTask(id);
+    const updateStatus = useUpdateTaskStatus(id);
+    const { user } = useAuth();
+
+    // Owners can mutate position + status (full Move endpoint). Members
+    // are restricted to status changes only, so for them an in-column
+    // drag is a no-op and a cross-column drag is committed as a pure
+    // status update (no lexorank write).
+    const isOwner = !!user && !!project && user.id === project.owner_id;
 
     const [boardFilter, setBoardFilter] = useState<BoardFilter>(DEFAULT_BOARD_FILTER);
     const [columnFilters, setColumnFilters] = useState<Record<TaskStatus, BoardFilter>>({
@@ -99,7 +108,12 @@ export default function BoardPage() {
         return result;
     }, [board, boardFilter, columnFilters]);
 
+    // "Sortable" here means the column accepts in-column manual reorder.
+    // That requires both: the effective sort is "position" (otherwise
+    // the sort key would override any new position immediately), and
+    // the viewer is the project owner (members may only update status).
     const isSortableColumn = (status: TaskStatus): boolean =>
+        isOwner &&
         composeFilters(boardFilter, columnFilters[status]).sortBy === "position";
 
     // Drag-and-drop sensors. A small distance threshold keeps a single
@@ -134,23 +148,38 @@ export default function BoardPage() {
         // Dropping straight onto a column droppable id ("todo" / etc.)
         // sends the card to the END of that column. Dropping on another
         // card means "insert before that card in its column".
-        const isColumnDrop = (COLUMNS.some((c) => c.status === overId));
+        const isColumnDrop = COLUMNS.some((c) => c.status === overId);
         const targetStatus = isColumnDrop
             ? (overId as TaskStatus)
             : locate(filtered, overId)?.status;
         if (!targetStatus) return;
 
-        // Same column reorder is only meaningful when the column is on
-        // the manual sort — otherwise the sort would override the new
-        // position immediately. Block it instead of writing then losing.
-        if (from.status === targetStatus && !isSortableColumn(targetStatus)) {
+        const crossColumn = from.status !== targetStatus;
+
+        // RBAC: members can only update status. An in-column drag is a
+        // pure reorder (position change with no status change), which
+        // members aren't allowed to do — drop it silently. Cross-column
+        // drags ARE status changes and members may perform them.
+        if (!crossColumn && !isOwner) return;
+
+        // Even for owners, an in-column reorder is only meaningful when
+        // the column is on the manual sort — otherwise the derived sort
+        // would override any new position immediately. Block instead of
+        // writing then losing.
+        if (!crossColumn && !isSortableColumn(targetStatus)) return;
+
+        // Members can't write positions, so cross-column drags go
+        // through the status-only endpoint. The card lands wherever its
+        // existing position places it in the new column.
+        if (!isOwner) {
+            updateStatus.mutate({ id: activeId, status: targetStatus });
             return;
         }
 
         const targetList = filtered[targetStatus];
-
         let prev: Task | null;
         let next: Task | null;
+
         if (isColumnDrop) {
             prev = targetList[targetList.length - 1] ?? null;
             // If the user is dropping into the column they already came
@@ -175,20 +204,17 @@ export default function BoardPage() {
         if (prev?.id === activeId) prev = null;
         if (next?.id === activeId) next = null;
 
-        const newPosition = computeNewPosition(prev, next);
-
         // No-op guard: same column, same neighbours.
-        const fromList = filtered[from.status];
-        const currentPrev = fromList[from.index - 1] ?? null;
-        const currentNext = fromList[from.index + 1] ?? null;
-        if (
-            from.status === targetStatus &&
-            currentPrev?.id === prev?.id &&
-            currentNext?.id === next?.id
-        ) {
-            return;
+        if (!crossColumn) {
+            const fromList = filtered[from.status];
+            const currentPrev = fromList[from.index - 1] ?? null;
+            const currentNext = fromList[from.index + 1] ?? null;
+            if (currentPrev?.id === prev?.id && currentNext?.id === next?.id) {
+                return;
+            }
         }
 
+        const newPosition = computeNewPosition(prev, next);
         moveTask.mutate({ id: activeId, status: targetStatus, position: newPosition });
     };
 
@@ -245,9 +271,11 @@ export default function BoardPage() {
                         ))}
                     </div>
 
-                    <DragOverlay>
+                    <DragOverlay dropAnimation={{ duration: 200 }}>
                         {activeTask ? (
-                            <KanbanCard task={activeTask} sortable={false} />
+                            <div className="rotate-2 shadow-lg">
+                                <KanbanCard task={activeTask} sortable disableDnd />
+                            </div>
                         ) : null}
                     </DragOverlay>
                 </DndContext>

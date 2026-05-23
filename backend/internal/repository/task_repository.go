@@ -366,13 +366,18 @@ func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []st
 // BoardList returns every task in the project ordered by (status, position)
 // for the Kanban board. No pagination — boards are meant to render in one
 // shot, and the composite index (project_id, status, position) covers the
-// read.
+// read. LEFT JOIN users so each card carries the assignee's name + email
+// for the avatar tooltip; without it the frontend's initials fallback
+// would show a "?" instead of the actual assignee.
 func (r *taskRepository) BoardList(ctx context.Context, projectID string) ([]*model.Task, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
-		FROM tasks
-		WHERE project_id = $1 AND deleted_at IS NULL
-		ORDER BY status, position
+		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
+		       t.project_id, t.assignee_id, t.created_by, t.due_date,
+		       t.created_at, t.updated_at, u.name, u.email
+		FROM tasks t
+		LEFT JOIN users u ON u.id = t.assignee_id
+		WHERE t.project_id = $1 AND t.deleted_at IS NULL
+		ORDER BY t.status, t.position
 	`, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("board list: %w", err)
@@ -381,7 +386,7 @@ func (r *taskRepository) BoardList(ctx context.Context, projectID string) ([]*mo
 
 	tasks := make([]*model.Task, 0)
 	for rows.Next() {
-		t, err := scanTask(rows)
+		t, err := scanTaskWithAssignee(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}

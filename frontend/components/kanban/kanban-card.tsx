@@ -19,7 +19,7 @@ const priorityBadge: Record<TaskPriority, { label: string; variant: "default" | 
 };
 
 function initialsOf(name: string | undefined | null): string {
-    if (!name) return "?";
+    if (!name) return "";
     return name
         .split(/\s+/)
         .map((p) => p[0])
@@ -30,79 +30,96 @@ function initialsOf(name: string | undefined | null): string {
 
 interface KanbanCardProps {
     task: Task;
-    /** When false the card is rendered statically — no drag handles, no
-     * sortable transform. Used by the column toolbar's non-manual sorts
-     * so the card layout stays consistent without inviting a drag the
-     * server would just ignore against the sort key. */
+    /** Drag affordance: when false the grip-handle cursor and hover hint
+     * are hidden because in-column reorder is meaningless for this card
+     * (column is on a derived sort, or the viewer isn't the owner). The
+     * card is still draggable via dnd-kit so cross-column status drops
+     * keep working for everyone — the drop handler is the final arbiter
+     * of whether a write actually happens. */
     sortable: boolean;
+    /** When true the sortable hook is fully disabled. Used by the
+     * DragOverlay clone so it doesn't try to claim its own sortable id
+     * alongside the real card during the drag. */
+    disableDnd?: boolean;
 }
 
-export function KanbanCard({ task, sortable }: KanbanCardProps) {
+export function KanbanCard({ task, sortable, disableDnd }: KanbanCardProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-        useSortable({ id: task.id, disabled: !sortable });
+        useSortable({ id: task.id, disabled: !!disableDnd });
 
-    const style = sortable
-        ? {
+    const style = disableDnd
+        ? undefined
+        : {
               transform: CSS.Transform.toString(transform),
               transition,
-          }
-        : undefined;
+          };
 
     const priority = priorityBadge[task.priority];
+    const initials = initialsOf(task.assignee_name);
 
+    // Outer wrapper is a plain <div> so dnd-kit's setNodeRef attaches to
+    // a real DOM node. The shared Card component is a function component
+    // that doesn't forward refs (React 18), so passing setNodeRef
+    // directly to <Card> would silently no-op — and the drag wouldn't
+    // start at all. The wrapper takes the listeners too; the Card
+    // inside is just the visual.
     return (
-        <Card
+        <div
             ref={setNodeRef}
             style={style}
-            size="sm"
-            className={cn(
-                "group/card relative gap-2 px-3 py-2.5",
-                isDragging && "opacity-50",
-                sortable && "cursor-grab active:cursor-grabbing"
-            )}
             {...attributes}
-            {...(sortable ? listeners : {})}
-        >
-            {sortable && (
-                <GripVertical
-                    className="pointer-events-none absolute right-1 top-2 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-60"
-                    aria-hidden
-                />
+            {...(disableDnd ? {} : listeners)}
+            className={cn(
+                "touch-none",
+                isDragging && "opacity-50",
+                !disableDnd && (sortable ? "cursor-grab active:cursor-grabbing" : "cursor-grab")
             )}
+        >
+            <Card size="sm" className="group/card relative gap-2 px-3 py-2.5">
+                {sortable && (
+                    <GripVertical
+                        className="pointer-events-none absolute right-1 top-2 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-60"
+                        aria-hidden
+                    />
+                )}
 
-            <Link
-                href={`/tasks/${task.id}`}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="text-sm font-medium leading-snug hover:underline pr-4"
-            >
-                {task.title}
-            </Link>
+                <Link
+                    href={`/tasks/${task.id}`}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="text-sm font-medium leading-snug hover:underline pr-4"
+                >
+                    {task.title}
+                </Link>
 
-            <div className="flex items-center justify-between gap-2 pt-1">
-                <Badge variant={priority.variant} className="capitalize text-[0.7rem] px-1.5 py-0">
-                    {priority.label}
-                </Badge>
+                <div className="flex items-center justify-between gap-2 pt-1">
+                    <Badge variant={priority.variant} className="capitalize text-[0.7rem] px-1.5 py-0">
+                        {priority.label}
+                    </Badge>
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
-                    {task.due_date && (
-                        <span className="flex items-center gap-1 whitespace-nowrap" title={`Due ${formatDate(task.due_date)}`}>
-                            <Calendar className="size-3" />
-                            {formatDate(task.due_date)}
-                        </span>
-                    )}
-                    {task.assignee_id ? (
-                        <Avatar className="size-5" title={task.assignee_name ?? "Assignee"}>
-                            <AvatarFallback className="text-[0.55rem]">
-                                {initialsOf(task.assignee_name)}
-                            </AvatarFallback>
-                        </Avatar>
-                    ) : (
-                        <span className="flex items-center gap-1 text-muted-foreground/70">
-                            <User className="size-3" />
-                        </span>
-                    )}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+                        {task.due_date && (
+                            <span className="flex items-center gap-1 whitespace-nowrap" title={`Due ${formatDate(task.due_date)}`}>
+                                <Calendar className="size-3" />
+                                {formatDate(task.due_date)}
+                            </span>
+                        )}
+                        {task.assignee_id && initials ? (
+                            <Avatar className="size-5" title={task.assignee_name ?? "Assignee"}>
+                                <AvatarFallback className="text-[0.55rem]">
+                                    {initials}
+                                </AvatarFallback>
+                            </Avatar>
+                        ) : (
+                            <span
+                                className="flex items-center gap-1 text-muted-foreground/70"
+                                title="Unassigned"
+                            >
+                                <User className="size-3" />
+                            </span>
+                        )}
+                    </div>
                 </div>
-            </div>
-        </Card>
+            </Card>
+        </div>
     );
 }
