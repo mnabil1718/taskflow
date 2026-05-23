@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { User } from "@/lib/types";
 
 const roleBadgeVariant: Record<string, "default" | "secondary" | "outline"> = {
@@ -27,6 +27,7 @@ interface ProjectMembersPanelProps {
 export function ProjectMembersPanel({ projectId, currentUserId }: ProjectMembersPanelProps) {
     const [query, setQuery] = useState("");
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [addingId, setAddingId] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     const { data: members = [], isLoading } = useProjectMembers(projectId);
@@ -40,9 +41,14 @@ export function ProjectMembersPanel({ projectId, currentUserId }: ProjectMembers
     const filteredResults = searchResults.filter((u) => !existingIds.has(u.id));
 
     const handleAdd = async (user: User) => {
-        await addMember.mutateAsync({ user_id: user.id, role: "member" });
-        setQuery("");
-        setDropdownOpen(false);
+        setAddingId(user.id);
+        try {
+            await addMember.mutateAsync({ user_id: user.id, role: "member" });
+            setQuery("");
+            setDropdownOpen(false);
+        } finally {
+            setAddingId(null);
+        }
     };
 
     const handleRemove = async (userId: string) => {
@@ -86,24 +92,29 @@ export function ProjectMembersPanel({ projectId, currentUserId }: ProjectMembers
                                 </div>
                             ) : (
                                 <ul className="max-h-56 overflow-y-auto py-1">
-                                    {filteredResults.map((user) => (
-                                        <li key={user.id}>
-                                            <button
-                                                type="button"
+                                    {filteredResults.map((user) => {
+                                        const isAdding = addingId === user.id;
+                                        return (
+                                            <li
+                                                key={user.id}
+                                                className="flex items-center gap-3 px-3 py-1.5"
                                                 onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => handleAdd(user)}
-                                                disabled={addMember.isPending}
-                                                className={cn(
-                                                    "flex w-full flex-col items-start px-3 py-1.5 text-left text-sm",
-                                                    "hover:bg-accent hover:text-accent-foreground",
-                                                    "disabled:opacity-50 disabled:pointer-events-none"
-                                                )}
                                             >
-                                                <span className="font-medium">{user.name}</span>
-                                                <span className="text-xs text-muted-foreground">{user.email}</span>
-                                            </button>
-                                        </li>
-                                    ))}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{user.name}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() => handleAdd(user)}
+                                                    disabled={addingId !== null}
+                                                >
+                                                    {isAdding ? "Adding…" : "Add"}
+                                                </Button>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>
@@ -140,15 +151,22 @@ export function ProjectMembersPanel({ projectId, currentUserId }: ProjectMembers
                                     {member.role}
                                 </Badge>
                                 {member.role !== "owner" && member.user_id !== currentUserId && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label={`Remove ${member.name}`}
-                                        onClick={() => handleRemove(member.user_id)}
-                                        disabled={removeMember.isPending}
-                                    >
-                                        <UserMinus className="size-4 text-destructive" />
-                                    </Button>
+                                    <Tooltip>
+                                        <TooltipTrigger
+                                            render={
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    aria-label={`Remove ${member.name}`}
+                                                    onClick={() => handleRemove(member.user_id)}
+                                                    disabled={removeMember.isPending}
+                                                >
+                                                    <UserMinus className="size-4 text-destructive" />
+                                                </Button>
+                                            }
+                                        />
+                                        <TooltipContent>Remove member</TooltipContent>
+                                    </Tooltip>
                                 )}
                             </li>
                         ))}
