@@ -109,6 +109,8 @@ export interface Task {
   position: string;
   project_id: string;
   assignee_id?: string;
+  assignee_name?: string;
+  assignee_email?: string;
   created_by?: string;
   due_date?: string;
   created_at: string;

@@ -16,18 +16,20 @@ const (
 )
 
 type Task struct {
-	ID          string       `json:"id"                    example:"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
-	Title       string       `json:"title"                 example:"Wire up auth middleware"`
-	Description string       `json:"description,omitempty" example:"Plug JWTProtected into the v1 router"`
-	Status      TaskStatus   `json:"status"                example:"todo"`
-	Priority    TaskPriority `json:"priority"              example:"medium"`
-	Position    string       `json:"position"              example:"00001000"`
-	ProjectID   string       `json:"project_id"            example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
-	AssigneeID  *string      `json:"assignee_id,omitempty" example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
-	CreatedBy   *string      `json:"created_by,omitempty"  example:"6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f"`
-	DueDate     *time.Time   `json:"due_date,omitempty"    example:"2026-06-01T17:00:00Z"`
-	CreatedAt   time.Time    `json:"created_at"            example:"2026-05-20T09:15:00Z"`
-	UpdatedAt   time.Time    `json:"updated_at"            example:"2026-05-20T09:15:00Z"`
+	ID             string       `json:"id"                       example:"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
+	Title          string       `json:"title"                    example:"Wire up auth middleware"`
+	Description    string       `json:"description,omitempty"    example:"Plug JWTProtected into the v1 router"`
+	Status         TaskStatus   `json:"status"                   example:"todo"`
+	Priority       TaskPriority `json:"priority"                 example:"medium"`
+	Position       string       `json:"position"                 example:"00001000"`
+	ProjectID      string       `json:"project_id"               example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
+	AssigneeID     *string      `json:"assignee_id,omitempty"    example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
+	AssigneeName   *string      `json:"assignee_name,omitempty"  example:"Jane Doe"`
+	AssigneeEmail  *string      `json:"assignee_email,omitempty" example:"jane@example.com"`
+	CreatedBy      *string      `json:"created_by,omitempty"     example:"6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f"`
+	DueDate        *time.Time   `json:"due_date,omitempty"       example:"2026-06-01T17:00:00Z"`
+	CreatedAt      time.Time    `json:"created_at"               example:"2026-05-20T09:15:00Z"`
+	UpdatedAt      time.Time    `json:"updated_at"               example:"2026-05-20T09:15:00Z"`
 }
 
 type TaskActivityLog struct {

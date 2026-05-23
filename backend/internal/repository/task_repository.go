@@ -158,7 +158,7 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 		idx++
 	}
 	if filter.Search != "" {
-		conds = append(conds, fmt.Sprintf("title ILIKE $%d", idx))
+		conds = append(conds, fmt.Sprintf("(title ILIKE $%d OR u.name ILIKE $%d OR u.email ILIKE $%d)", idx, idx, idx))
 		args = append(args, "%"+filter.Search+"%")
 		idx++
 	}
@@ -166,7 +166,12 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	where := strings.Join(conds, " AND ")
 
 	var total int
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM tasks WHERE %s", where)
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM tasks t
+		LEFT JOIN users u ON u.id = t.assignee_id
+		WHERE %s
+	`, where)
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count tasks: %w", err)
 	}
@@ -176,10 +181,13 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	listArgs := append([]any{}, args...)
 	listArgs = append(listArgs, limit, offset)
 	listQuery := fmt.Sprintf(`
-		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
-		FROM tasks
+		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
+		       t.project_id, t.assignee_id, t.created_by, t.due_date, t.created_at, t.updated_at,
+		       u.name, u.email
+		FROM tasks t
+		LEFT JOIN users u ON u.id = t.assignee_id
 		WHERE %s
-		ORDER BY %s %s NULLS LAST, created_at DESC
+		ORDER BY t.%s %s NULLS LAST, t.created_at DESC
 		LIMIT $%d OFFSET $%d
 	`, where, sortCol, sortDir, idx, idx+1)
 
@@ -191,7 +199,7 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 
 	tasks := make([]*model.Task, 0)
 	for rows.Next() {
-		t, err := scanTask(rows)
+		t, err := scanTaskWithAssignee(rows)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan task: %w", err)
 		}
@@ -242,7 +250,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 		idx++
 	}
 	if filter.Search != "" {
-		conds = append(conds, fmt.Sprintf("t.title ILIKE $%d", idx))
+		conds = append(conds, fmt.Sprintf("(t.title ILIKE $%d OR u.name ILIKE $%d OR u.email ILIKE $%d)", idx, idx, idx))
 		args = append(args, "%"+filter.Search+"%")
 		idx++
 	}
@@ -254,6 +262,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 		SELECT COUNT(*)
 		FROM tasks t
 		JOIN project_members pm ON pm.project_id = t.project_id
+		LEFT JOIN users u ON u.id = t.assignee_id
 		WHERE %s
 	`, where)
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -266,9 +275,11 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	listArgs = append(listArgs, limit, offset)
 	listQuery := fmt.Sprintf(`
 		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
-		       t.project_id, t.assignee_id, t.created_by, t.due_date, t.created_at, t.updated_at
+		       t.project_id, t.assignee_id, t.created_by, t.due_date, t.created_at, t.updated_at,
+		       u.name, u.email
 		FROM tasks t
 		JOIN project_members pm ON pm.project_id = t.project_id
+		LEFT JOIN users u ON u.id = t.assignee_id
 		WHERE %s
 		ORDER BY t.%s %s NULLS LAST, t.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -282,7 +293,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 
 	tasks := make([]*model.Task, 0)
 	for rows.Next() {
-		t, err := scanTask(rows)
+		t, err := scanTaskWithAssignee(rows)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan task: %w", err)
 		}
@@ -566,7 +577,7 @@ func (r *taskRepository) PendingReminders(ctx context.Context, kind ReminderKind
 
 // scanTask reads one row from a SELECT that follows the canonical task
 // column order. Centralised so the column list and the nullable handling
-// stay in lockstep across List, BoardList, and PendingReminders.
+// stay in lockstep across BoardList and PendingReminders.
 func scanTask(rows *sql.Rows) (*model.Task, error) {
 	t := &model.Task{}
 	var desc sql.NullString
@@ -599,6 +610,53 @@ func scanTask(rows *sql.Rows) (*model.Task, error) {
 	}
 	if dueDate.Valid {
 		t.DueDate = &dueDate.Time
+	}
+	return t, nil
+}
+
+// scanTaskWithAssignee is like scanTask but also reads the two extra columns
+// (u.name, u.email) produced by the LEFT JOIN users in List and ListAll.
+func scanTaskWithAssignee(rows *sql.Rows) (*model.Task, error) {
+	t := &model.Task{}
+	var desc sql.NullString
+	var assignee, creator sql.NullString
+	var dueDate sql.NullTime
+	var assigneeName, assigneeEmail sql.NullString
+	if err := rows.Scan(
+		&t.ID,
+		&t.Title,
+		&desc,
+		&t.Status,
+		&t.Priority,
+		&t.Position,
+		&t.ProjectID,
+		&assignee,
+		&creator,
+		&dueDate,
+		&t.CreatedAt,
+		&t.UpdatedAt,
+		&assigneeName,
+		&assigneeEmail,
+	); err != nil {
+		return nil, err
+	}
+	if desc.Valid {
+		t.Description = desc.String
+	}
+	if assignee.Valid {
+		t.AssigneeID = &assignee.String
+	}
+	if creator.Valid {
+		t.CreatedBy = &creator.String
+	}
+	if dueDate.Valid {
+		t.DueDate = &dueDate.Time
+	}
+	if assigneeName.Valid {
+		t.AssigneeName = &assigneeName.String
+	}
+	if assigneeEmail.Valid {
+		t.AssigneeEmail = &assigneeEmail.String
 	}
 	return t, nil
 }
