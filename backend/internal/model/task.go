@@ -71,6 +71,14 @@ type TaskFilter struct {
 	Limit      int
 }
 
+type BulkDeleteTasksRequest struct {
+	IDs []string `json:"ids"`
+}
+
+type BulkDeleteTasksResponse struct {
+	DeletedCount int `json:"deleted_count"`
+}
+
 type AssignTaskRequest struct {
 	AssigneeID *string `json:"assignee_id" example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
 }

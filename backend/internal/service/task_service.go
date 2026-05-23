@@ -21,6 +21,7 @@ type TaskService interface {
 	GetByID(ctx context.Context, userID, taskID string) (*model.Task, error)
 	List(ctx context.Context, userID, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
 	ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	BulkDelete(ctx context.Context, userID string, ids []string) (int, error)
 	Board(ctx context.Context, userID, projectID string) (*model.BoardView, error)
 	Update(ctx context.Context, userID, taskID string, req *model.UpdateTaskRequest) (*model.Task, error)
 	Move(ctx context.Context, userID, taskID string, req *model.MoveTaskRequest) (*model.Task, error)
@@ -179,6 +180,18 @@ func (s *taskService) ListAll(ctx context.Context, userID string, filter model.T
 		return nil, 0, fmt.Errorf("%w: priority must be 'low', 'medium', or 'high'", ErrValidation)
 	}
 	return s.taskRepo.ListAll(ctx, userID, filter)
+}
+
+const bulkDeleteTasksMaxIDs = 100
+
+func (s *taskService) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	if len(ids) > bulkDeleteTasksMaxIDs {
+		return 0, fmt.Errorf("%w: at most %d ids per request", ErrValidation, bulkDeleteTasksMaxIDs)
+	}
+	return s.taskRepo.BulkDelete(ctx, userID, ids)
 }
 
 func (s *taskService) Board(ctx context.Context, userID, projectID string) (*model.BoardView, error) {

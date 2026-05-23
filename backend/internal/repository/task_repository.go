@@ -25,6 +25,7 @@ type TaskRepository interface {
 	GetByID(ctx context.Context, id string) (*model.Task, error)
 	List(ctx context.Context, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
 	ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	BulkDelete(ctx context.Context, userID string, ids []string) (int, error)
 	BoardList(ctx context.Context, projectID string) ([]*model.Task, error)
 	Update(ctx context.Context, t *model.Task) error
 	UpdateAssignee(ctx context.Context, id string, assigneeID *string) error
@@ -273,6 +274,47 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	}
 
 	return tasks, total, rows.Err()
+}
+
+// BulkDelete removes tasks the caller is allowed to delete. A task is
+// deletable when the caller is the task creator OR the owner of the task's
+// project. Tasks in the ids list that don't pass this check are silently
+// skipped. Returns the number of rows actually deleted.
+func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	// Build $2, $3, ... placeholders for the id list.
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, userID)
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args = append(args, id)
+	}
+	inClause := strings.Join(placeholders, ",")
+
+	query := fmt.Sprintf(`
+		WITH deleted AS (
+			DELETE FROM tasks
+			WHERE id IN (%s)
+			  AND (
+			    created_by = $1
+			    OR project_id IN (
+			        SELECT id FROM projects WHERE owner_id = $1 AND deleted_at IS NULL
+			    )
+			  )
+			RETURNING id
+		)
+		SELECT COUNT(*) FROM deleted
+	`, inClause)
+
+	var count int
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("bulk delete tasks: %w", err)
+	}
+	return count, nil
 }
 
 // BoardList returns every task in the project ordered by (status, position)

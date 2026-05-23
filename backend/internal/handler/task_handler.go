@@ -185,6 +185,38 @@ func (h *TaskHandler) ListAll(c *fiber.Ctx) error {
 	})
 }
 
+// BulkDelete godoc
+// @Summary      Bulk-delete tasks
+// @Description  Deletes tasks the caller is authorised to remove (project owner or task creator).
+// @Description  Tasks in the list that don't meet the permission check are silently skipped.
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        request body     model.BulkDeleteTasksRequest                       true "Task IDs (max 100)"
+// @Success      200     {object} response.Body{data=model.BulkDeleteTasksResponse}  "Tasks deleted"
+// @Failure      400     {object} response.Body                                      "Validation error or malformed body"
+// @Failure      401     {object} response.Body                                      "Missing or invalid token"
+// @Failure      500     {object} response.Body                                      "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/bulk-delete [post]
+func (h *TaskHandler) BulkDelete(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	var req model.BulkDeleteTasksRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	count, err := h.svc.BulkDelete(c.Context(), userID, req.IDs)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "tasks deleted", model.BulkDeleteTasksResponse{
+		DeletedCount: count,
+	})
+}
+
 // Board godoc
 // @Summary      Get the Kanban board for a project
 // @Description  Returns all tasks in the project grouped by status, with each column already
