@@ -100,24 +100,48 @@ func (r *trashRepository) List(ctx context.Context, userID string) ([]*model.Tra
 	return out, rows.Err()
 }
 
+// RestoreProjects clears deleted_at on projects owned by the caller AND on
+// the tasks that were soft-deleted *as part of* those project deletions
+// (matched by identical deleted_at timestamp). Tasks individually trashed
+// before or after the project was deleted have a different timestamp and
+// stay in trash for the user to handle separately.
 func (r *trashRepository) RestoreProjects(ctx context.Context, userID string, ids []string) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
 	placeholders, args := bulkIDArgs(userID, ids)
+	// `old_state` snapshots the (id, deleted_at) pairs before the project
+	// UPDATE runs. PostgreSQL modifying CTEs share one snapshot, so the
+	// task UPDATE still sees the original timestamps even though
+	// rest_projects is busy clearing them.
 	query := fmt.Sprintf(`
-		UPDATE projects
-		SET deleted_at = NULL, updated_at = NOW()
-		WHERE id IN (%s)
-		  AND owner_id = $1
-		  AND deleted_at IS NOT NULL
+		WITH old_state AS (
+			SELECT id, deleted_at
+			FROM projects
+			WHERE id IN (%s)
+			  AND owner_id = $1
+			  AND deleted_at IS NOT NULL
+		), rest_tasks AS (
+			UPDATE tasks t
+			SET deleted_at = NULL, updated_at = NOW()
+			FROM old_state os
+			WHERE t.project_id = os.id
+			  AND t.deleted_at = os.deleted_at
+			RETURNING 1
+		), rest_projects AS (
+			UPDATE projects p
+			SET deleted_at = NULL, updated_at = NOW()
+			FROM old_state os
+			WHERE p.id = os.id
+			RETURNING 1
+		)
+		SELECT COUNT(*) FROM rest_projects
 	`, placeholders)
-	result, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
+	var count int
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("restore projects: %w", err)
 	}
-	n, _ := result.RowsAffected()
-	return int(n), nil
+	return count, nil
 }
 
 func (r *trashRepository) RestoreTasks(ctx context.Context, userID string, ids []string) (int, error) {

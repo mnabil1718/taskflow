@@ -175,26 +175,42 @@ func (r *projectRepository) Update(ctx context.Context, p *model.Project) error 
 	return nil
 }
 
+// Delete soft-deletes the project AND cascades the soft delete to every
+// active task in it. The task rows get the project's exact deleted_at
+// timestamp so a later restore can identify which tasks disappeared
+// because of the project (vs. tasks the user trashed individually).
 func (r *projectRepository) Delete(ctx context.Context, id string) error {
-	result, err := r.db.ExecContext(ctx, `
-		UPDATE projects SET deleted_at = NOW()
-		WHERE id = $1 AND deleted_at IS NULL
-	`, id)
+	var count int
+	err := r.db.QueryRowContext(ctx, `
+		WITH del_project AS (
+			UPDATE projects SET deleted_at = NOW()
+			WHERE id = $1 AND deleted_at IS NULL
+			RETURNING id, deleted_at
+		), del_tasks AS (
+			UPDATE tasks t
+			SET deleted_at = dp.deleted_at, updated_at = NOW()
+			FROM del_project dp
+			WHERE t.project_id = dp.id
+			  AND t.deleted_at IS NULL
+			RETURNING 1
+		)
+		SELECT COUNT(*) FROM del_project
+	`, id).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("delete project: %w", err)
 	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
+	if count == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
 
 // BulkSoftDelete marks every project the caller owns and that hasn't already
-// been deleted as deleted_at = NOW(). Projects the caller doesn't own — or
-// IDs that don't exist — are silently skipped; the returned count tells the
-// caller how many rows were actually affected. This keeps the operation
-// idempotent under concurrent deletes without requiring a per-ID round trip.
+// been deleted as deleted_at = NOW(), and cascades the soft delete to each
+// project's active tasks (same timestamp). Projects the caller doesn't own —
+// or IDs that don't exist — are silently skipped; the returned count tells
+// the caller how many project rows were actually affected. This keeps the
+// operation idempotent under concurrent deletes without a per-ID round trip.
 func (r *projectRepository) BulkSoftDelete(ctx context.Context, ownerID string, ids []string) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
@@ -209,18 +225,28 @@ func (r *projectRepository) BulkSoftDelete(ctx context.Context, ownerID string, 
 	}
 
 	query := fmt.Sprintf(`
-		UPDATE projects SET deleted_at = NOW()
-		WHERE owner_id = $1
-		  AND deleted_at IS NULL
-		  AND id IN (%s)
+		WITH del_projects AS (
+			UPDATE projects SET deleted_at = NOW()
+			WHERE owner_id = $1
+			  AND deleted_at IS NULL
+			  AND id IN (%s)
+			RETURNING id, deleted_at
+		), del_tasks AS (
+			UPDATE tasks t
+			SET deleted_at = dp.deleted_at, updated_at = NOW()
+			FROM del_projects dp
+			WHERE t.project_id = dp.id
+			  AND t.deleted_at IS NULL
+			RETURNING 1
+		)
+		SELECT COUNT(*) FROM del_projects
 	`, strings.Join(placeholders, ","))
 
-	result, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
+	var count int
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("bulk soft delete projects: %w", err)
 	}
-	n, _ := result.RowsAffected()
-	return int(n), nil
+	return count, nil
 }
 
 func (r *projectRepository) AddMember(ctx context.Context, projectID, userID string, role model.ProjectRole) error {
