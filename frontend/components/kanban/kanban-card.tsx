@@ -58,11 +58,18 @@ export function KanbanCard({ task, sortable, disableDnd }: KanbanCardProps) {
     const initials = initialsOf(task.assignee_name);
 
     // Outer wrapper is a plain <div> so dnd-kit's setNodeRef attaches to
-    // a real DOM node. The shared Card component is a function component
-    // that doesn't forward refs (React 18), so passing setNodeRef
-    // directly to <Card> would silently no-op — and the drag wouldn't
-    // start at all. The wrapper takes the listeners too; the Card
-    // inside is just the visual.
+    // a real DOM node. The shared Card / CardContent components are
+    // React 18 function components without forwardRef, so passing
+    // setNodeRef directly to <Card> would silently no-op and the drag
+    // wouldn't start at all. The wrapper takes the listeners too; the
+    // Card inside is just the visual.
+    //
+    // Drag handle layout: the wrapper carries listeners across the
+    // whole card surface, but the title <Link> is wrapped in an inline
+    // element that stops the pointerdown from reaching the wrapper.
+    // That makes the link only as wide as its text — anywhere else on
+    // the card (whitespace to its right, the meta row, the grip area)
+    // initiates a drag. Click navigates to /tasks/:id; drag reorders.
     return (
         <div
             ref={setNodeRef}
@@ -75,21 +82,30 @@ export function KanbanCard({ task, sortable, disableDnd }: KanbanCardProps) {
                 !disableDnd && (sortable ? "cursor-grab active:cursor-grabbing" : "cursor-grab")
             )}
         >
-            <Card size="sm" className="group/card relative gap-2 px-3 py-2.5">
-                {sortable && (
-                    <GripVertical
-                        className="pointer-events-none absolute right-1 top-2 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-60"
-                        aria-hidden
-                    />
-                )}
-
-                <Link
-                    href={`/tasks/${task.id}`}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="text-sm font-medium leading-snug hover:underline pr-4"
-                >
-                    {task.title}
-                </Link>
+            <Card size="sm" className="group/card gap-2 px-3 py-2.5">
+                <div className="flex items-start gap-2 min-w-0">
+                    {/* The inline wrapper stops the drag from claiming
+                        pointerdown on the title; the link itself is
+                        max-w-full + truncate so a long title can't push
+                        the grip icon off-screen. */}
+                    <span
+                        className="inline-flex max-w-full min-w-0"
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        <Link
+                            href={`/tasks/${task.id}`}
+                            className="text-sm font-medium leading-snug hover:underline truncate"
+                        >
+                            {task.title}
+                        </Link>
+                    </span>
+                    {sortable && (
+                        <GripVertical
+                            className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-60"
+                            aria-hidden
+                        />
+                    )}
+                </div>
 
                 <div className="flex items-center justify-between gap-2 pt-1">
                     <Badge variant={priority.variant} className="capitalize text-[0.7rem] px-1.5 py-0">
