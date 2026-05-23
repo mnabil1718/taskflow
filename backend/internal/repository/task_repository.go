@@ -24,6 +24,8 @@ type TaskRepository interface {
 	Create(ctx context.Context, t *model.Task) error
 	GetByID(ctx context.Context, id string) (*model.Task, error)
 	List(ctx context.Context, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	BulkDelete(ctx context.Context, userID string, ids []string) (int, error)
 	BoardList(ctx context.Context, projectID string) ([]*model.Task, error)
 	Update(ctx context.Context, t *model.Task) error
 	UpdateAssignee(ctx context.Context, id string, assigneeID *string) error
@@ -132,19 +134,32 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	args := []any{projectID}
 	idx := 2
 
-	if filter.Status != "" {
-		conds = append(conds, fmt.Sprintf("status = $%d", idx))
-		args = append(args, filter.Status)
-		idx++
+	if len(filter.Statuses) > 0 {
+		placeholders := make([]string, len(filter.Statuses))
+		for i, s := range filter.Statuses {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(s))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("status IN (%s)", strings.Join(placeholders, ", ")))
 	}
-	if filter.Priority != "" {
-		conds = append(conds, fmt.Sprintf("priority = $%d", idx))
-		args = append(args, filter.Priority)
-		idx++
+	if len(filter.Priorities) > 0 {
+		placeholders := make([]string, len(filter.Priorities))
+		for i, p := range filter.Priorities {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(p))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("priority IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	if filter.AssigneeID != "" {
 		conds = append(conds, fmt.Sprintf("assignee_id = $%d", idx))
 		args = append(args, filter.AssigneeID)
+		idx++
+	}
+	if filter.Search != "" {
+		conds = append(conds, fmt.Sprintf("title ILIKE $%d", idx))
+		args = append(args, "%"+filter.Search+"%")
 		idx++
 	}
 
@@ -184,6 +199,138 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	}
 
 	return tasks, total, rows.Err()
+}
+
+// ListAll returns a paginated list of tasks across every project the given
+// user is a member of. Supports the same filters as List.
+func (r *taskRepository) ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error) {
+	page := filter.Page
+	limit := filter.Limit
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	conds := []string{"pm.user_id = $1"}
+	args := []any{userID}
+	idx := 2
+
+	if len(filter.Statuses) > 0 {
+		placeholders := make([]string, len(filter.Statuses))
+		for i, s := range filter.Statuses {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(s))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("t.status IN (%s)", strings.Join(placeholders, ", ")))
+	}
+	if len(filter.Priorities) > 0 {
+		placeholders := make([]string, len(filter.Priorities))
+		for i, p := range filter.Priorities {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(p))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("t.priority IN (%s)", strings.Join(placeholders, ", ")))
+	}
+	if filter.AssigneeID != "" {
+		conds = append(conds, fmt.Sprintf("t.assignee_id = $%d", idx))
+		args = append(args, filter.AssigneeID)
+		idx++
+	}
+	if filter.Search != "" {
+		conds = append(conds, fmt.Sprintf("t.title ILIKE $%d", idx))
+		args = append(args, "%"+filter.Search+"%")
+		idx++
+	}
+
+	where := strings.Join(conds, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM tasks t
+		JOIN project_members pm ON pm.project_id = t.project_id
+		WHERE %s
+	`, where)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count all tasks: %w", err)
+	}
+
+	sortCol, sortDir := taskSortClause(filter.SortBy, filter.SortOrder)
+
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, limit, offset)
+	listQuery := fmt.Sprintf(`
+		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
+		       t.project_id, t.assignee_id, t.created_by, t.due_date, t.created_at, t.updated_at
+		FROM tasks t
+		JOIN project_members pm ON pm.project_id = t.project_id
+		WHERE %s
+		ORDER BY t.%s %s NULLS LAST, t.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, where, sortCol, sortDir, idx, idx+1)
+
+	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list all tasks: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := make([]*model.Task, 0)
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan task: %w", err)
+		}
+		tasks = append(tasks, t)
+	}
+
+	return tasks, total, rows.Err()
+}
+
+// BulkDelete removes tasks the caller is allowed to delete. A task is
+// deletable when the caller is the task creator OR the owner of the task's
+// project. Tasks in the ids list that don't pass this check are silently
+// skipped. Returns the number of rows actually deleted.
+func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	// Build $2, $3, ... placeholders for the id list.
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, userID)
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args = append(args, id)
+	}
+	inClause := strings.Join(placeholders, ",")
+
+	query := fmt.Sprintf(`
+		WITH deleted AS (
+			DELETE FROM tasks
+			WHERE id IN (%s)
+			  AND (
+			    created_by = $1
+			    OR project_id IN (
+			        SELECT id FROM projects WHERE owner_id = $1 AND deleted_at IS NULL
+			    )
+			  )
+			RETURNING id
+		)
+		SELECT COUNT(*) FROM deleted
+	`, inClause)
+
+	var count int
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("bulk delete tasks: %w", err)
+	}
+	return count, nil
 }
 
 // BoardList returns every task in the project ordered by (status, position)

@@ -40,6 +40,8 @@ interface DataTableProps<TData> {
     isLoading?: boolean;
     empty?: React.ReactNode;
     skeletonRows?: number;
+    /** Optional toolbar rendered above the table (e.g. DataTableToolbar). */
+    toolbar?: React.ReactNode;
 }
 
 function SortIcon({ isSorted }: { isSorted: false | "asc" | "desc" }) {
@@ -53,6 +55,7 @@ export function DataTable<TData>({
     isLoading,
     empty,
     skeletonRows = 5,
+    toolbar,
 }: DataTableProps<TData>) {
     const columns = table.getAllLeafColumns();
     const rows = table.getRowModel().rows;
@@ -60,6 +63,7 @@ export function DataTable<TData>({
     if (isLoading) {
         return (
             <Card>
+                {toolbar && <div className="border-b p-4">{toolbar}</div>}
                 <CardContent className="p-0">
                     <Table className="min-w-max">
                         <TableHeader>
@@ -97,6 +101,7 @@ export function DataTable<TData>({
     if (rows.length === 0) {
         return (
             <Card>
+                {toolbar && <div className="border-b p-4">{toolbar}</div>}
                 <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                     {empty}
                 </CardContent>
@@ -106,6 +111,7 @@ export function DataTable<TData>({
 
     return (
         <Card>
+            {toolbar && <div className="border-b p-4">{toolbar}</div>}
             <CardContent className="p-0">
                 <Table>
                     <TableHeader>

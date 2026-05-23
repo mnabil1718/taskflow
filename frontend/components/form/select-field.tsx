@@ -10,9 +10,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
-interface SelectOption {
+export interface SelectOption {
     value: string;
     label: string;
+    /** Secondary text rendered below the label in the dropdown (not shown in trigger). */
+    description?: string;
 }
 
 interface SelectFieldProps {
@@ -21,6 +23,8 @@ interface SelectFieldProps {
     placeholder?: string;
     required?: boolean;
     desc?: string;
+    /** Called with the new value on every change, alongside the internal field update. */
+    onChange?: (value: string) => void;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -36,9 +40,11 @@ export function SelectField({
     placeholder,
     required,
     desc,
+    onChange,
 }: SelectFieldProps) {
     const field = useFieldContext<string>();
     const errors = field.state.meta.errors;
+    const selectedOption = options.find((o) => o.value === field.state.value);
 
     return (
         <div className="space-y-1.5">
@@ -47,18 +53,28 @@ export function SelectField({
             </Label>
             <Select
                 value={field.state.value}
-                onValueChange={(value) => field.handleChange(value as string)}
+                onValueChange={(value) => {
+                    const v = value ?? "";
+                    field.handleChange(v);
+                    onChange?.(v);
+                }}
             >
                 <SelectTrigger
                     id={field.name}
                     className="w-full"
                     aria-invalid={errors.length > 0}
                 >
-                    <SelectValue placeholder={placeholder} />
+                    {selectedOption ? (
+                        <span data-slot="select-value" className="flex flex-1 text-left text-sm truncate">
+                            {selectedOption.label}
+                        </span>
+                    ) : (
+                        <SelectValue placeholder={placeholder} />
+                    )}
                 </SelectTrigger>
                 <SelectContent>
                     {options.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
+                        <SelectItem key={opt.value} value={opt.value} description={opt.description}>
                             {opt.label}
                         </SelectItem>
                     ))}

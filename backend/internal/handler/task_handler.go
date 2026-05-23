@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"net/url"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -93,10 +94,25 @@ func (h *TaskHandler) List(c *fiber.Ctx) error {
 		limit = 10
 	}
 
+	qv, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	var statuses []model.TaskStatus
+	for _, s := range qv["status"] {
+		if s != "" {
+			statuses = append(statuses, model.TaskStatus(s))
+		}
+	}
+	var priorities []model.TaskPriority
+	for _, p := range qv["priority"] {
+		if p != "" {
+			priorities = append(priorities, model.TaskPriority(p))
+		}
+	}
+
 	filter := model.TaskFilter{
-		Status:     model.TaskStatus(c.Query("status")),
-		Priority:   model.TaskPriority(c.Query("priority")),
+		Statuses:   statuses,
+		Priorities: priorities,
 		AssigneeID: c.Query("assignee_id"),
+		Search:     c.Query("q"),
 		SortBy:     c.Query("sort_by"),
 		SortOrder:  c.Query("sort_order"),
 		Page:       page,
@@ -119,6 +135,114 @@ func (h *TaskHandler) List(c *fiber.Ctx) error {
 		Page:       page,
 		Limit:      limit,
 		TotalPages: totalPages,
+	})
+}
+
+// ListAll godoc
+// @Summary      List tasks across all user's projects
+// @Description  Returns a paginated list of tasks from every project the caller is a member of.
+// @Description  Supports the same filters and sorting as the project-scoped list.
+// @Tags         tasks
+// @Produce      json
+// @Param        q            query    string                                  false "Search tasks by title (case-insensitive)"
+// @Param        status       query    string                                  false "Filter by status: todo, in_progress, done"
+// @Param        priority     query    string                                  false "Filter by priority: low, medium, high"
+// @Param        assignee_id  query    string                                  false "Filter by assignee UUID"
+// @Param        sort_by      query    string                                  false "Sort column: status, priority, due_date, updated_at, title, created_at (default created_at)"
+// @Param        sort_order   query    string                                  false "Sort direction: asc or desc (default desc)"
+// @Param        page         query    int                                     false "Page number (default 1)"
+// @Param        limit        query    int                                     false "Items per page, max 100 (default 10)"
+// @Success      200          {object} response.Body{data=handler.TaskPage}    "Tasks retrieved"
+// @Failure      400          {object} response.Body                           "Invalid filter value"
+// @Failure      401          {object} response.Body                           "Missing or invalid token"
+// @Failure      500          {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks [get]
+func (h *TaskHandler) ListAll(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	limit, _ := strconv.Atoi(c.Query("limit", "10"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 10
+	}
+
+	qv, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	var statuses []model.TaskStatus
+	for _, s := range qv["status"] {
+		if s != "" {
+			statuses = append(statuses, model.TaskStatus(s))
+		}
+	}
+	var priorities []model.TaskPriority
+	for _, p := range qv["priority"] {
+		if p != "" {
+			priorities = append(priorities, model.TaskPriority(p))
+		}
+	}
+
+	filter := model.TaskFilter{
+		Statuses:   statuses,
+		Priorities: priorities,
+		AssigneeID: c.Query("assignee_id"),
+		Search:     c.Query("q"),
+		SortBy:     c.Query("sort_by"),
+		SortOrder:  c.Query("sort_order"),
+		Page:       page,
+		Limit:      limit,
+	}
+
+	tasks, total, err := h.svc.ListAll(c.Context(), userID, filter)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	totalPages := total / limit
+	if total%limit != 0 {
+		totalPages++
+	}
+
+	return response.Success(c, fiber.StatusOK, "tasks retrieved", TaskPage{
+		Items:      tasks,
+		Total:      total,
+		Page:       page,
+		Limit:      limit,
+		TotalPages: totalPages,
+	})
+}
+
+// BulkDelete godoc
+// @Summary      Bulk-delete tasks
+// @Description  Deletes tasks the caller is authorised to remove (project owner or task creator).
+// @Description  Tasks in the list that don't meet the permission check are silently skipped.
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        request body     model.BulkDeleteTasksRequest                       true "Task IDs (max 100)"
+// @Success      200     {object} response.Body{data=model.BulkDeleteTasksResponse}  "Tasks deleted"
+// @Failure      400     {object} response.Body                                      "Validation error or malformed body"
+// @Failure      401     {object} response.Body                                      "Missing or invalid token"
+// @Failure      500     {object} response.Body                                      "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/bulk-delete [post]
+func (h *TaskHandler) BulkDelete(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	var req model.BulkDeleteTasksRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	count, err := h.svc.BulkDelete(c.Context(), userID, req.IDs)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "tasks deleted", model.BulkDeleteTasksResponse{
+		DeletedCount: count,
 	})
 }
 

@@ -85,8 +85,9 @@ export function useAddMember(projectID: string) {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (data: AddMemberRequest) => projectsApi.addMember(projectID, data),
-        onSuccess: () => {
+        onSuccess: (member) => {
             qc.invalidateQueries({ queryKey: projectKeys.members(projectID) });
+            toast.success(`${member.name} added to project`);
         },
     });
 }
@@ -97,6 +98,7 @@ export function useRemoveMember(projectID: string) {
         mutationFn: (userID: string) => projectsApi.removeMember(projectID, userID),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: projectKeys.members(projectID) });
+            toast.success("Member removed");
         },
     });
 }

@@ -61,13 +61,22 @@ type UpdateTaskRequest struct {
 }
 
 type TaskFilter struct {
-	Status     TaskStatus
-	Priority   TaskPriority
+	Statuses   []TaskStatus
+	Priorities []TaskPriority
 	AssigneeID string
+	Search     string
 	SortBy     string
 	SortOrder  string
 	Page       int
 	Limit      int
+}
+
+type BulkDeleteTasksRequest struct {
+	IDs []string `json:"ids"`
+}
+
+type BulkDeleteTasksResponse struct {
+	DeletedCount int `json:"deleted_count"`
 }
 
 type AssignTaskRequest struct {

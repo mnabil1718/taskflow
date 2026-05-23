@@ -124,9 +124,10 @@ export interface TaskPage {
 }
 
 export interface TaskFilter {
-  status?: TaskStatus;
-  priority?: TaskPriority;
+  status?: TaskStatus[];
+  priority?: TaskPriority[];
   assignee_id?: string;
+  search?: string;
   sort_by?: string;
   sort_order?: "asc" | "desc";
   page?: number;
@@ -167,6 +168,10 @@ export interface TaskActivityLog {
   from_status: TaskStatus;
   to_status: TaskStatus;
   created_at: string;
+}
+
+export interface BulkDeleteTasksResponse {
+  deleted_count: number;
 }
 
 export interface BoardView {
