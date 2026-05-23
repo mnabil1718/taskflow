@@ -127,6 +127,7 @@ export interface TaskFilter {
   status?: TaskStatus;
   priority?: TaskPriority;
   assignee_id?: string;
+  search?: string;
   sort_by?: string;
   sort_order?: "asc" | "desc";
   page?: number;

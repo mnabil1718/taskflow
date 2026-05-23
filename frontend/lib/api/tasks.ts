@@ -16,6 +16,7 @@ function toQueryString(filter: TaskFilter): string {
   if (filter.status) params.set("status", filter.status);
   if (filter.priority) params.set("priority", filter.priority);
   if (filter.assignee_id) params.set("assignee_id", filter.assignee_id);
+  if (filter.search) params.set("q", filter.search);
   if (filter.sort_by) params.set("sort_by", filter.sort_by);
   if (filter.sort_order) params.set("sort_order", filter.sort_order);
   if (filter.page) params.set("page", String(filter.page));
@@ -25,6 +26,9 @@ function toQueryString(filter: TaskFilter): string {
 }
 
 export const tasksApi = {
+  listAll: (filter: TaskFilter = {}): Promise<TaskPage> =>
+    apiRequest(`/tasks${toQueryString(filter)}`),
+
   list: (projectId: string, filter: TaskFilter = {}): Promise<TaskPage> =>
     apiRequest(`/projects/${projectId}/tasks${toQueryString(filter)}`),
 

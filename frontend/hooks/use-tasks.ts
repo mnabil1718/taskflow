@@ -16,7 +16,17 @@ export const taskKeys = {
     all: (projectId: string) => ["projects", projectId, "tasks"] as const,
     list: (projectId: string, filter: TaskFilter) =>
         ["projects", projectId, "tasks", "list", filter] as const,
+    allTasks: (filter: TaskFilter) => ["tasks", "all", filter] as const,
 };
+
+export function useAllTasks(filter: TaskFilter = {}) {
+    return useQuery({
+        queryKey: taskKeys.allTasks(filter),
+        queryFn: () => tasksApi.listAll(filter),
+        staleTime: 30 * 1000,
+        placeholderData: keepPreviousData,
+    });
+}
 
 export function useTasks(projectId: string, filter: TaskFilter = {}) {
     return useQuery({

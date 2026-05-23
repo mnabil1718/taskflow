@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { useState } from "react";
 import {
     useReactTable,
@@ -10,11 +9,10 @@ import {
     createColumnHelper,
     type SortingState,
 } from "@tanstack/react-table";
-import { ArrowLeft, ClipboardList } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
 import { AppNavbar } from "@/components/app-navbar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
     Select,
     SelectContent,
@@ -25,18 +23,11 @@ import {
 import { DataTable } from "@/components/data-table";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaginationControls } from "@/components/pagination-controls";
-import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
-import { TaskRowActions } from "@/components/tasks/task-row-actions";
-import { useProject, useProjectMembers } from "@/hooks/use-projects";
-import { useTasks } from "@/hooks/use-tasks";
+import { useProjects } from "@/hooks/use-projects";
+import { useAllTasks } from "@/hooks/use-tasks";
 import { useDebounced } from "@/hooks/use-debounced";
 import { formatDate } from "@/lib/date-utils";
-import type {
-    ProjectMember,
-    Task,
-    TaskPriority,
-    TaskStatus,
-} from "@/lib/types";
+import type { Task, TaskPriority, TaskStatus } from "@/lib/types";
 
 const PAGE_SIZE = 10;
 
@@ -60,8 +51,7 @@ const sortableColumns: Record<string, string> = {
     created_at: "created_at",
 };
 
-function buildColumns(members: ProjectMember[], projectId: string) {
-    const memberMap = new Map(members.map((m) => [m.user_id, m.name]));
+function buildColumns(projectMap: Map<string, string>) {
     const columnHelper = createColumnHelper<Task>();
 
     return [
@@ -78,6 +68,22 @@ function buildColumns(members: ProjectMember[], projectId: string) {
                     {info.getValue() ?? "—"}
                 </span>
             ),
+        }),
+        columnHelper.accessor("project_id", {
+            header: "Project",
+            enableSorting: false,
+            cell: (info) => {
+                const pid = info.getValue();
+                const name = projectMap.get(pid);
+                return (
+                    <Link
+                        href={`/projects/${pid}`}
+                        className="text-sm hover:underline truncate max-w-[10rem] block"
+                    >
+                        {name ?? pid.slice(0, 8) + "…"}
+                    </Link>
+                );
+            },
         }),
         columnHelper.accessor("status", {
             header: "Status",
@@ -101,18 +107,6 @@ function buildColumns(members: ProjectMember[], projectId: string) {
                 );
             },
         }),
-        columnHelper.accessor("assignee_id", {
-            header: "Assignee",
-            enableSorting: false,
-            cell: (info) => {
-                const id = info.getValue();
-                return (
-                    <span className="text-muted-foreground">
-                        {id ? (memberMap.get(id) ?? "Unknown") : "—"}
-                    </span>
-                );
-            },
-        }),
         columnHelper.accessor("due_date", {
             header: "Due date",
             cell: (info) => {
@@ -132,24 +126,10 @@ function buildColumns(members: ProjectMember[], projectId: string) {
                 </span>
             ),
         }),
-        columnHelper.display({
-            id: "actions",
-            header: "Actions",
-            enableSorting: false,
-            cell: ({ row }) => (
-                <TaskRowActions
-                    task={row.original}
-                    projectId={projectId}
-                    members={members}
-                />
-            ),
-        }),
     ];
 }
 
-export default function ProjectDetailPage() {
-    const { id } = useParams<{ id: string }>();
-
+export default function TasksPage() {
     const [page, setPage] = useState(1);
     const [sorting, setSorting] = useState<SortingState>([]);
     const [searchInput, setSearchInput] = useState("");
@@ -169,15 +149,18 @@ export default function ProjectDetailPage() {
         sort_order: sortCol ? (sortCol.desc ? "desc" : "asc") as "asc" | "desc" : undefined,
     };
 
-    const { data: project, isLoading: projectLoading } = useProject(id);
-    const { data: members = [] } = useProjectMembers(id);
-    const { data, isLoading: tasksLoading, isFetching } = useTasks(id, filter);
+    const { data, isLoading, isFetching } = useAllTasks(filter);
+    const { data: projectsData } = useProjects({ page: 1, limit: 100 });
 
     const tasks = data?.items ?? [];
     const total = data?.total ?? 0;
     const totalPages = data?.total_pages ?? 0;
 
-    const columns = buildColumns(members, id);
+    const projectMap = new Map(
+        projectsData?.items.map((p) => [p.id, p.name]) ?? []
+    );
+
+    const columns = buildColumns(projectMap);
 
     const table = useReactTable({
         data: tasks,
@@ -208,80 +191,58 @@ export default function ProjectDetailPage() {
         setPage(1);
     };
 
+    const toolbar = (
+        <DataTableToolbar
+            searchValue={searchInput}
+            onSearchChange={handleSearchChange}
+            searchPlaceholder="Search tasks…"
+        >
+            <Select value={statusFilter || "all"} onValueChange={handleStatusChange}>
+                <SelectTrigger className="w-36">
+                    <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                </SelectContent>
+            </Select>
+
+            <Select value={priorityFilter || "all"} onValueChange={handlePriorityChange}>
+                <SelectTrigger className="w-36">
+                    <SelectValue placeholder="All priorities" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All priorities</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+            </Select>
+        </DataTableToolbar>
+    );
+
     return (
         <>
-            <AppNavbar title={projectLoading ? "Loading…" : (project?.name ?? "Project")} />
+            <AppNavbar title="Tasks" />
             <main className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="-ml-2"
-                        render={<Link href="/projects" />}
-                    >
-                        <ArrowLeft className="size-4" />
-                        Projects
-                    </Button>
-                </div>
-
-                <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                        <h2 className="text-lg font-semibold">
-                            {project?.name ?? "—"}
-                        </h2>
-                        {project?.description && (
-                            <p className="text-sm text-muted-foreground max-w-prose">
-                                {project.description}
-                            </p>
-                        )}
-                        {project?.deadline && (
-                            <p className="text-xs text-muted-foreground">
-                                Deadline: {formatDate(project.deadline)}
-                            </p>
-                        )}
-                    </div>
-                    <CreateTaskDialog projectId={id} members={members} />
+                <div className="flex items-center justify-between gap-4">
+                    <h2 className="text-lg font-semibold">All Tasks</h2>
                 </div>
 
                 <DataTable
                     table={table}
-                    isLoading={tasksLoading}
-                    toolbar={
-                        <DataTableToolbar
-                            searchValue={searchInput}
-                            onSearchChange={handleSearchChange}
-                            searchPlaceholder="Search tasks…"
-                        >
-                            <Select value={statusFilter || "all"} onValueChange={handleStatusChange}>
-                                <SelectTrigger className="w-36">
-                                    <SelectValue placeholder="All statuses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All statuses</SelectItem>
-                                    <SelectItem value="todo">To Do</SelectItem>
-                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                    <SelectItem value="done">Done</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={priorityFilter || "all"} onValueChange={handlePriorityChange}>
-                                <SelectTrigger className="w-36">
-                                    <SelectValue placeholder="All priorities" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All priorities</SelectItem>
-                                    <SelectItem value="low">Low</SelectItem>
-                                    <SelectItem value="medium">Medium</SelectItem>
-                                    <SelectItem value="high">High</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </DataTableToolbar>
-                    }
+                    isLoading={isLoading}
+                    toolbar={toolbar}
                     empty={
                         <>
                             <ClipboardList className="mb-3 size-10 text-muted-foreground" />
-                            <p className="text-sm font-medium">No tasks yet</p>
+                            <p className="text-sm font-medium">No tasks found</p>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Create the first task for this project.
+                                {search || statusFilter || priorityFilter
+                                    ? "Try adjusting your search or filters."
+                                    : "Tasks from your projects will appear here."}
                             </p>
                         </>
                     }
