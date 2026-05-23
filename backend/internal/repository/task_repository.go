@@ -158,7 +158,7 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 		idx++
 	}
 	if filter.Search != "" {
-		conds = append(conds, fmt.Sprintf("title ILIKE $%d", idx))
+		conds = append(conds, fmt.Sprintf("(title ILIKE $%d OR u.name ILIKE $%d OR u.email ILIKE $%d)", idx, idx, idx))
 		args = append(args, "%"+filter.Search+"%")
 		idx++
 	}
@@ -166,7 +166,12 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	where := strings.Join(conds, " AND ")
 
 	var total int
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM tasks WHERE %s", where)
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM tasks t
+		LEFT JOIN users u ON u.id = t.assignee_id
+		WHERE %s
+	`, where)
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count tasks: %w", err)
 	}
@@ -245,7 +250,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 		idx++
 	}
 	if filter.Search != "" {
-		conds = append(conds, fmt.Sprintf("t.title ILIKE $%d", idx))
+		conds = append(conds, fmt.Sprintf("(t.title ILIKE $%d OR u.name ILIKE $%d OR u.email ILIKE $%d)", idx, idx, idx))
 		args = append(args, "%"+filter.Search+"%")
 		idx++
 	}
@@ -257,6 +262,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 		SELECT COUNT(*)
 		FROM tasks t
 		JOIN project_members pm ON pm.project_id = t.project_id
+		LEFT JOIN users u ON u.id = t.assignee_id
 		WHERE %s
 	`, where)
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
