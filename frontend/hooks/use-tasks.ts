@@ -100,6 +100,11 @@ export function useUpdateTask(projectId: string) {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
             qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
+            // The detail page reads /tasks/:id and /tasks/:id/activity
+            // through its own cache keys — invalidate both so a status
+            // change made from the edit dialog renders without a refresh.
+            qc.invalidateQueries({ queryKey: ["tasks", "detail", task.id] });
+            qc.invalidateQueries({ queryKey: ["tasks", task.id, "activity"] });
             toast.success(`Task "${task.title}" updated`);
         },
     });
