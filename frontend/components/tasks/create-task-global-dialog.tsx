@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { useAppForm } from "@/lib/app-form";
 import { useCreateTask } from "@/hooks/use-tasks";
 import { useProjects, useProjectMembers } from "@/hooks/use-projects";
+import { useAuth } from "@/lib/auth-context";
 import { createTaskSchema, createTaskGlobalSchema } from "@/schemas/task.schema";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/form-dialog";
@@ -27,7 +28,13 @@ export function CreateTaskGlobalDialog() {
     const [selectedProjectId, setSelectedProjectId] = useState("");
 
     const { data: projectsData } = useProjects({ page: 1, limit: 100 });
-    const projects = projectsData?.items ?? [];
+    const { user } = useAuth();
+    // Only owned projects can host new tasks (task creation is owner-only),
+    // so the picker hides projects the user is just a member of — the
+    // backend would reject those anyway.
+    const projects = (projectsData?.items ?? []).filter(
+        (p) => p.owner_id === user?.id
+    );
     const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
 
     const { data: members = [] } = useProjectMembers(selectedProjectId);

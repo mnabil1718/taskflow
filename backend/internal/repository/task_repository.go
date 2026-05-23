@@ -322,10 +322,11 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	return tasks, total, rows.Err()
 }
 
-// BulkDelete removes tasks the caller is allowed to delete. A task is
-// deletable when the caller is the task creator OR the owner of the task's
-// project. Tasks in the ids list that don't pass this check are silently
-// skipped. Returns the number of rows actually deleted.
+// BulkDelete soft-deletes tasks the caller owns at the project level.
+// Tasks whose parent project isn't owned by the caller are silently
+// skipped (the WHERE filter doesn't match them), so the count reflects
+// only rows the RBAC rule actually permitted. The owner-only policy
+// matches the single Delete endpoint.
 func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
@@ -347,11 +348,8 @@ func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []st
 			SET deleted_at = NOW(), updated_at = NOW()
 			WHERE id IN (%s)
 			  AND deleted_at IS NULL
-			  AND (
-			    created_by = $1
-			    OR project_id IN (
-			        SELECT id FROM projects WHERE owner_id = $1 AND deleted_at IS NULL
-			    )
+			  AND project_id IN (
+			      SELECT id FROM projects WHERE owner_id = $1 AND deleted_at IS NULL
 			  )
 			RETURNING id
 		)

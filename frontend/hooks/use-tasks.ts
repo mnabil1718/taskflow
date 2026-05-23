@@ -10,6 +10,7 @@ import { tasksApi } from "@/lib/api/tasks";
 import type {
     CreateTaskRequest,
     TaskFilter,
+    TaskStatus,
     UpdateTaskRequest,
 } from "@/lib/types";
 
@@ -106,6 +107,27 @@ export function useUpdateTask(projectId: string) {
             qc.invalidateQueries({ queryKey: ["tasks", "detail", task.id] });
             qc.invalidateQueries({ queryKey: ["tasks", task.id, "activity"] });
             toast.success(`Task "${task.title}" updated`);
+        },
+    });
+}
+
+// useUpdateTaskStatus calls the member-allowed PATCH /tasks/:id/status
+// endpoint — both project owners and regular members can use this, and the
+// backend rejects any non-status field by virtue of the endpoint's request
+// shape (it only accepts { status }). Use this whenever you want to move
+// a task between columns without opening the full edit dialog.
+export function useUpdateTaskStatus(projectId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, status }: { id: string; status: TaskStatus }) =>
+            tasksApi.updateStatus(id, { status }),
+        onSuccess: (task) => {
+            qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
+            qc.invalidateQueries({ queryKey: ["dashboard"] });
+            qc.invalidateQueries({ queryKey: ["tasks", "detail", task.id] });
+            qc.invalidateQueries({ queryKey: ["tasks", task.id, "activity"] });
+            toast.success(`Status changed to ${task.status.replace("_", " ")}`);
         },
     });
 }

@@ -102,6 +102,14 @@ type AssignTaskRequest struct {
 	AssigneeID *string `json:"assignee_id" example:"f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"`
 }
 
+// UpdateTaskStatusRequest is the payload for the member-allowed status
+// endpoint. Splitting it out from UpdateTaskRequest keeps the RBAC rule
+// "members can only change status" enforceable at the API surface — the
+// endpoint can't accept a title or assignee field even if the client tries.
+type UpdateTaskStatusRequest struct {
+	Status TaskStatus `json:"status" example:"in_progress"`
+}
+
 // MoveTaskRequest is the payload sent by the Kanban board on drag & drop.
 // The client computes the new position string (Lexorank) so the server stays
 // a dumb persistence layer for ordering. Status may equal the current status
