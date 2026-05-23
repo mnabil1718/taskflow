@@ -182,6 +182,30 @@ export interface BoardView {
   done: Task[];
 }
 
+// Trash
+export type TrashKind = "project" | "task";
+
+export interface TrashItem {
+  kind: TrashKind;
+  id: string;
+  title: string;
+  project_id?: string;
+  project_name?: string;
+  deleted_at: string;
+}
+
+export interface BulkTrashRequest {
+  project_ids: string[];
+  task_ids: string[];
+}
+
+export interface BulkTrashResponse {
+  restored_projects?: number;
+  restored_tasks?: number;
+  purged_projects?: number;
+  purged_tasks?: number;
+}
+
 // Dashboard
 export interface ProjectTaskCounts {
   project_id: string;

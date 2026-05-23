@@ -22,6 +22,7 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 		repository.NewProjectRepository,
 		repository.NewTaskRepository,
 		repository.NewDashboardRepository,
+		repository.NewTrashRepository,
 		notifier.NewHub,
 		notifier.NewDeadlineScheduler,
 		service.NewAuthService,
@@ -29,6 +30,7 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 		service.NewTaskService,
 		service.NewDashboardService,
 		service.NewUserService,
+		service.NewTrashService,
 		handler.NewHealthHandler,
 		handler.NewAuthHandler,
 		handler.NewProjectHandler,
@@ -36,6 +38,7 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 		handler.NewDashboardHandler,
 		handler.NewNotificationHandler,
 		handler.NewUserHandler,
+		handler.NewTrashHandler,
 		bootstrap.NewApp,
 		bootstrap.NewServer,
 	)

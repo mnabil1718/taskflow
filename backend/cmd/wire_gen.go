@@ -41,7 +41,10 @@ func initServer(cfg *config.Config, db *sql.DB) *bootstrap.Server {
 	notificationHandler := handler.NewNotificationHandler(hub)
 	userService := service.NewUserService(userRepository)
 	userHandler := handler.NewUserHandler(userService)
-	app := bootstrap.NewApp(cfg, authService, healthHandler, authHandler, projectHandler, taskHandler, dashboardHandler, notificationHandler, userHandler)
+	trashRepository := repository.NewTrashRepository(db)
+	trashService := service.NewTrashService(trashRepository)
+	trashHandler := handler.NewTrashHandler(trashService)
+	app := bootstrap.NewApp(cfg, authService, healthHandler, authHandler, projectHandler, taskHandler, dashboardHandler, notificationHandler, userHandler, trashHandler)
 	deadlineScheduler := notifier.NewDeadlineScheduler(taskRepository, hub)
 	server := bootstrap.NewServer(cfg, app, deadlineScheduler)
 	return server

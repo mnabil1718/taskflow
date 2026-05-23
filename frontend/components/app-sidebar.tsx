@@ -6,6 +6,7 @@ import {
     LayoutDashboard,
     FolderKanban,
     CheckSquare,
+    Trash2,
     LogOut,
     ChevronsUpDown,
 } from "lucide-react";
@@ -38,6 +39,7 @@ const navItems = [
     { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { title: "Projects", href: "/projects", icon: FolderKanban },
     { title: "Tasks", href: "/tasks", icon: CheckSquare },
+    { title: "Trash", href: "/trash", icon: Trash2 },
 ];
 
 export function AppSidebar() {

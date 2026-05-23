@@ -32,7 +32,7 @@ func (r *dashboardRepository) ProjectTaskCounts(ctx context.Context, userID stri
 			COUNT(t.id) AS total
 		FROM projects p
 		JOIN project_members pm ON pm.project_id = p.id
-		LEFT JOIN tasks t ON t.project_id = p.id
+		LEFT JOIN tasks t ON t.project_id = p.id AND t.deleted_at IS NULL
 		WHERE pm.user_id = $1 AND p.deleted_at IS NULL
 		GROUP BY p.id, p.name, p.created_at
 		ORDER BY p.created_at DESC
@@ -59,6 +59,7 @@ func (r *dashboardRepository) UpcomingTasksForUser(ctx context.Context, userID s
 		FROM tasks t
 		JOIN projects p ON p.id = t.project_id
 		WHERE t.assignee_id = $1
+		  AND t.deleted_at IS NULL
 		  AND p.deleted_at IS NULL
 		  AND t.status != 'done'
 		  AND t.due_date IS NOT NULL

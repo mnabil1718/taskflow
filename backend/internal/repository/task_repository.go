@@ -81,7 +81,7 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 
 	err := r.db.QueryRowContext(ctx, `
 		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
-		FROM tasks WHERE id = $1
+		FROM tasks WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(
 		&t.ID,
 		&t.Title,
@@ -130,7 +130,7 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	}
 	offset := (page - 1) * limit
 
-	conds := []string{"project_id = $1"}
+	conds := []string{"project_id = $1", "t.deleted_at IS NULL"}
 	args := []any{projectID}
 	idx := 2
 
@@ -222,7 +222,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	}
 	offset := (page - 1) * limit
 
-	conds := []string{"pm.user_id = $1"}
+	conds := []string{"pm.user_id = $1", "t.deleted_at IS NULL", "p.deleted_at IS NULL"}
 	args := []any{userID}
 	idx := 2
 
@@ -261,6 +261,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	countQuery := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM tasks t
+		JOIN projects p ON p.id = t.project_id
 		JOIN project_members pm ON pm.project_id = t.project_id
 		LEFT JOIN users u ON u.id = t.assignee_id
 		WHERE %s
@@ -278,6 +279,7 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 		       t.project_id, t.assignee_id, t.created_by, t.due_date, t.created_at, t.updated_at,
 		       u.name, u.email
 		FROM tasks t
+		JOIN projects p ON p.id = t.project_id
 		JOIN project_members pm ON pm.project_id = t.project_id
 		LEFT JOIN users u ON u.id = t.assignee_id
 		WHERE %s
@@ -323,9 +325,11 @@ func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []st
 	inClause := strings.Join(placeholders, ",")
 
 	query := fmt.Sprintf(`
-		WITH deleted AS (
-			DELETE FROM tasks
+		WITH soft_deleted AS (
+			UPDATE tasks
+			SET deleted_at = NOW(), updated_at = NOW()
 			WHERE id IN (%s)
+			  AND deleted_at IS NULL
 			  AND (
 			    created_by = $1
 			    OR project_id IN (
@@ -334,7 +338,7 @@ func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []st
 			  )
 			RETURNING id
 		)
-		SELECT COUNT(*) FROM deleted
+		SELECT COUNT(*) FROM soft_deleted
 	`, inClause)
 
 	var count int
@@ -352,7 +356,7 @@ func (r *taskRepository) BoardList(ctx context.Context, projectID string) ([]*mo
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
 		FROM tasks
-		WHERE project_id = $1
+		WHERE project_id = $1 AND deleted_at IS NULL
 		ORDER BY status, position
 	`, projectID)
 	if err != nil {
@@ -381,7 +385,7 @@ func (r *taskRepository) Update(ctx context.Context, t *model.Task) error {
 		    assignee_id = $5,
 		    due_date = $6,
 		    updated_at = NOW()
-		WHERE id = $7
+		WHERE id = $7 AND deleted_at IS NULL
 	`,
 		t.Title,
 		nullableString(t.Description),
@@ -420,13 +424,13 @@ func (r *taskRepository) Move(ctx context.Context, id string, newStatus model.Ta
 	// clause only sees post-update values.
 	err := r.db.QueryRowContext(ctx, `
 		WITH old AS (
-		    SELECT status FROM tasks WHERE id = $3
+		    SELECT status FROM tasks WHERE id = $3 AND deleted_at IS NULL
 		), upd AS (
 		    UPDATE tasks
 		    SET status = $1,
 		        position = $2,
 		        updated_at = NOW()
-		    WHERE id = $3
+		    WHERE id = $3 AND deleted_at IS NULL
 		    RETURNING id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
 		)
 		SELECT upd.id, upd.title, upd.description, upd.status, upd.priority, upd.position, upd.project_id, upd.assignee_id, upd.created_by, upd.due_date, upd.created_at, upd.updated_at, old.status
@@ -473,7 +477,7 @@ func (r *taskRepository) UpdateAssignee(ctx context.Context, id string, assignee
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE tasks
 		SET assignee_id = $1, updated_at = NOW()
-		WHERE id = $2
+		WHERE id = $2 AND deleted_at IS NULL
 	`, nullableUUID(assigneeID), id)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -489,8 +493,14 @@ func (r *taskRepository) UpdateAssignee(ctx context.Context, id string, assignee
 	return nil
 }
 
+// Delete is a soft delete: it sets deleted_at = NOW() so the row stays
+// available for restoration from the trash. Read paths filter on
+// deleted_at IS NULL so the task disappears from every list immediately.
 func (r *taskRepository) Delete(ctx context.Context, id string) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM tasks WHERE id = $1`, id)
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE tasks SET deleted_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+	`, id)
 	if err != nil {
 		return fmt.Errorf("delete task: %w", err)
 	}
@@ -551,6 +561,7 @@ func (r *taskRepository) PendingReminders(ctx context.Context, kind ReminderKind
 		FROM tasks
 		WHERE assignee_id IS NOT NULL
 		  AND status != 'done'
+		  AND deleted_at IS NULL
 		  AND due_date IS NOT NULL
 		  AND due_date > NOW()
 		  AND due_date <= NOW() + INTERVAL '%s'
