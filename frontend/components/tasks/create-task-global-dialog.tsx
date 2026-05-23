@@ -6,17 +6,9 @@ import { Plus } from "lucide-react";
 import { useAppForm } from "@/lib/app-form";
 import { useCreateTask } from "@/hooks/use-tasks";
 import { useProjects, useProjectMembers } from "@/hooks/use-projects";
-import { createTaskSchema } from "@/schemas/task.schema";
+import { createTaskSchema, createTaskGlobalSchema } from "@/schemas/task.schema";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/form-dialog";
-import { Label } from "@/components/ui/label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 
 function todayLocalISODate(): string {
     const d = new Date();
@@ -33,21 +25,22 @@ const priorityOptions = [
 export function CreateTaskGlobalDialog() {
     const [open, setOpen] = useState(false);
     const [selectedProjectId, setSelectedProjectId] = useState("");
-    const [projectError, setProjectError] = useState("");
 
     const { data: projectsData } = useProjects({ page: 1, limit: 100 });
     const projects = projectsData?.items ?? [];
+    const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }));
 
     const { data: members = [] } = useProjectMembers(selectedProjectId);
     const createTask = useCreateTask(selectedProjectId);
 
     const assigneeOptions = [
         { value: "", label: "Unassigned" },
-        ...members.map((m) => ({ value: m.user_id, label: m.name })),
+        ...members.map((m) => ({ value: m.user_id, label: m.name, description: m.email })),
     ];
 
     const form = useAppForm({
         defaultValues: {
+            project_id: "",
             title: "",
             description: "",
             priority: "medium" as "low" | "medium" | "high",
@@ -55,10 +48,6 @@ export function CreateTaskGlobalDialog() {
             due_date: "",
         },
         onSubmit: async ({ value, formApi }) => {
-            if (!selectedProjectId) {
-                setProjectError("Project is required");
-                return;
-            }
             try {
                 await createTask.mutateAsync({
                     title: value.title.trim(),
@@ -71,7 +60,6 @@ export function CreateTaskGlobalDialog() {
                 });
                 formApi.reset();
                 setSelectedProjectId("");
-                setProjectError("");
                 setOpen(false);
             } catch {
                 // toasted by api interceptor
@@ -84,14 +72,7 @@ export function CreateTaskGlobalDialog() {
         if (!next) {
             form.reset();
             setSelectedProjectId("");
-            setProjectError("");
         }
-    };
-
-    const handleProjectChange = (pid: string | null) => {
-        setSelectedProjectId(pid ?? "");
-        setProjectError("");
-        form.setFieldValue("assignee_id", "");
     };
 
     return (
@@ -109,38 +90,25 @@ export function CreateTaskGlobalDialog() {
                 </Button>
             }
         >
-            <div className="space-y-1.5">
-                <Label>
-                    Project
-                    <span className="ml-0.5 text-destructive">*</span>
-                </Label>
-                <Select
-                    value={selectedProjectId || undefined}
-                    onValueChange={handleProjectChange}
-                >
-                    <SelectTrigger aria-invalid={!!projectError}>
-                        <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {projects.length === 0 ? (
-                            <div className="px-3 py-2 text-xs text-muted-foreground">
-                                No projects available
-                            </div>
-                        ) : (
-                            projects.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                    {p.name}
-                                </SelectItem>
-                            ))
-                        )}
-                    </SelectContent>
-                </Select>
-                {projectError && (
-                    <p className="text-[0.8rem] font-medium text-destructive">
-                        {projectError}
-                    </p>
+            <form.AppField
+                name="project_id"
+                validators={{
+                    onChange: createTaskGlobalSchema.shape.project_id,
+                    onBlur: createTaskGlobalSchema.shape.project_id,
+                }}
+                children={(field) => (
+                    <field.SelectField
+                        label="Project"
+                        options={projectOptions}
+                        placeholder="Select a project"
+                        required
+                        onChange={(pid) => {
+                            setSelectedProjectId(pid);
+                            form.setFieldValue("assignee_id", "");
+                        }}
+                    />
                 )}
-            </div>
+            />
 
             <form.AppField
                 name="title"

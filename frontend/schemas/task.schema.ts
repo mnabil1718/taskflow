@@ -21,3 +21,7 @@ export const createTaskSchema = z.object({
 export const editTaskSchema = createTaskSchema.extend({
     status: z.enum(["todo", "in_progress", "done"], { message: "Pick a status" }),
 });
+
+export const createTaskGlobalSchema = createTaskSchema.extend({
+    project_id: z.string().min(1, "Project is required"),
+});
