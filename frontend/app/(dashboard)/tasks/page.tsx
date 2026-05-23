@@ -136,6 +136,24 @@ function buildColumns(projectMap: Map<string, string>) {
                 );
             },
         }),
+        columnHelper.accessor("assignee_id", {
+            header: "Assignee",
+            enableSorting: false,
+            cell: (info) => {
+                const { assignee_name, assignee_email } = info.row.original;
+                if (!info.getValue()) {
+                    return <span className="text-muted-foreground">—</span>;
+                }
+                return (
+                    <div className="flex flex-col">
+                        <span className="text-sm">{assignee_name ?? "Unknown"}</span>
+                        {assignee_email && (
+                            <span className="text-xs text-muted-foreground">{assignee_email}</span>
+                        )}
+                    </div>
+                );
+            },
+        }),
         columnHelper.accessor("due_date", {
             header: "Due date",
             cell: (info) => {

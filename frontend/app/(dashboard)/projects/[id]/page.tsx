@@ -73,7 +73,6 @@ const sortableColumns: Record<string, string> = {
 };
 
 function buildColumns(members: ProjectMember[], projectId: string) {
-    const memberMap = new Map(members.map((m) => [m.user_id, m.name]));
     const columnHelper = createColumnHelper<Task>();
 
     return [
@@ -137,11 +136,17 @@ function buildColumns(members: ProjectMember[], projectId: string) {
             header: "Assignee",
             enableSorting: false,
             cell: (info) => {
-                const aid = info.getValue();
+                const { assignee_name, assignee_email } = info.row.original;
+                if (!info.getValue()) {
+                    return <span className="text-muted-foreground">—</span>;
+                }
                 return (
-                    <span className="text-muted-foreground">
-                        {aid ? (memberMap.get(aid) ?? "Unknown") : "—"}
-                    </span>
+                    <div className="flex flex-col">
+                        <span className="text-sm">{assignee_name ?? "Unknown"}</span>
+                        {assignee_email && (
+                            <span className="text-xs text-muted-foreground">{assignee_email}</span>
+                        )}
+                    </div>
                 );
             },
         }),
