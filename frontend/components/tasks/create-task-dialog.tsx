@@ -33,7 +33,7 @@ export function CreateTaskDialog({ projectId, members }: CreateTaskDialogProps) 
 
     const assigneeOptions = [
         { value: "", label: "Unassigned" },
-        ...members.map((m) => ({ value: m.user_id, label: m.name })),
+        ...members.map((m) => ({ value: m.user_id, label: m.name, description: m.email })),
     ];
 
     const form = useAppForm({
