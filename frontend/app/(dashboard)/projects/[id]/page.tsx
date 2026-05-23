@@ -72,30 +72,39 @@ const sortableColumns: Record<string, string> = {
     created_at: "created_at",
 };
 
-function buildColumns(members: ProjectMember[], projectId: string) {
+function buildColumns(members: ProjectMember[], projectId: string, isOwner: boolean) {
     const columnHelper = createColumnHelper<Task>();
 
+    // Selection column only exists for owners since members have no
+    // bulk-delete capability — showing checkboxes they can't act on is
+    // worse UX than hiding the column entirely.
+    const selectColumn = isOwner
+        ? [
+              columnHelper.display({
+                  id: "select",
+                  meta: { headerClassName: "w-[40px]", cellClassName: "w-[40px]" },
+                  header: ({ table }) => (
+                      <Checkbox
+                          checked={table.getIsAllPageRowsSelected()}
+                          indeterminate={table.getIsSomePageRowsSelected()}
+                          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+                          aria-label="Select all on page"
+                      />
+                  ),
+                  cell: ({ row }) => (
+                      <Checkbox
+                          checked={row.getIsSelected()}
+                          onCheckedChange={(v) => row.toggleSelected(!!v)}
+                          aria-label={`Select ${row.original.title}`}
+                      />
+                  ),
+                  enableSorting: false,
+              }),
+          ]
+        : [];
+
     return [
-        columnHelper.display({
-            id: "select",
-            meta: { headerClassName: "w-[40px]", cellClassName: "w-[40px]" },
-            header: ({ table }) => (
-                <Checkbox
-                    checked={table.getIsAllPageRowsSelected()}
-                    indeterminate={table.getIsSomePageRowsSelected()}
-                    onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-                    aria-label="Select all on page"
-                />
-            ),
-            cell: ({ row }) => (
-                <Checkbox
-                    checked={row.getIsSelected()}
-                    onCheckedChange={(v) => row.toggleSelected(!!v)}
-                    aria-label={`Select ${row.original.title}`}
-                />
-            ),
-            enableSorting: false,
-        }),
+        ...selectColumn,
         columnHelper.accessor("title", {
             header: "Title",
             meta: { cellClassName: "max-w-xs", cellInnerClassName: "truncate" },
@@ -185,6 +194,7 @@ function buildColumns(members: ProjectMember[], projectId: string) {
                 <TaskRowActions
                     task={row.original}
                     projectId={projectId}
+                    isOwner={isOwner}
                     members={members}
                 />
             ),
@@ -244,7 +254,7 @@ export default function ProjectDetailPage() {
 
     const isOwner = !!user && !!project && user.id === project.owner_id;
 
-    const columns = buildColumns(members, id);
+    const columns = buildColumns(members, id, isOwner);
 
     const table = useReactTable({
         data: tasks,
@@ -337,7 +347,7 @@ export default function ProjectDetailPage() {
                     {/* Tasks tab */}
                     <TabsContent value="tasks" className="pt-4 space-y-4">
                         <div className="flex items-center justify-end gap-2">
-                            {selectedCount > 0 && (
+                            {isOwner && selectedCount > 0 && (
                                 <Button
                                     variant="destructive"
                                     size="lg"
@@ -349,7 +359,7 @@ export default function ProjectDetailPage() {
                                     Delete {selectedCount} selected
                                 </Button>
                             )}
-                            <CreateTaskDialog projectId={id} members={members} />
+                            {isOwner && <CreateTaskDialog projectId={id} members={members} />}
                         </div>
 
                         <DataTable

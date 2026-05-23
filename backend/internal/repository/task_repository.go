@@ -77,11 +77,20 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 	t := &model.Task{}
 	var desc sql.NullString
 	var assignee, creator sql.NullString
+	var assigneeName, assigneeEmail sql.NullString
 	var dueDate sql.NullTime
 
+	// LEFT JOIN users so the detail page can render the assignee's name
+	// and email without a second round-trip. The List/ListAll queries
+	// already do this; the single-row read was the missing piece that
+	// made the task detail page show "Unknown".
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
-		FROM tasks WHERE id = $1 AND deleted_at IS NULL
+		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
+		       t.project_id, t.assignee_id, t.created_by, t.due_date,
+		       t.created_at, t.updated_at, u.name, u.email
+		FROM tasks t
+		LEFT JOIN users u ON u.id = t.assignee_id
+		WHERE t.id = $1 AND t.deleted_at IS NULL
 	`, id).Scan(
 		&t.ID,
 		&t.Title,
@@ -95,6 +104,8 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 		&dueDate,
 		&t.CreatedAt,
 		&t.UpdatedAt,
+		&assigneeName,
+		&assigneeEmail,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -114,6 +125,12 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 	}
 	if dueDate.Valid {
 		t.DueDate = &dueDate.Time
+	}
+	if assigneeName.Valid {
+		t.AssigneeName = &assigneeName.String
+	}
+	if assigneeEmail.Valid {
+		t.AssigneeEmail = &assigneeEmail.String
 	}
 
 	return t, nil
@@ -305,10 +322,11 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	return tasks, total, rows.Err()
 }
 
-// BulkDelete removes tasks the caller is allowed to delete. A task is
-// deletable when the caller is the task creator OR the owner of the task's
-// project. Tasks in the ids list that don't pass this check are silently
-// skipped. Returns the number of rows actually deleted.
+// BulkDelete soft-deletes tasks the caller owns at the project level.
+// Tasks whose parent project isn't owned by the caller are silently
+// skipped (the WHERE filter doesn't match them), so the count reflects
+// only rows the RBAC rule actually permitted. The owner-only policy
+// matches the single Delete endpoint.
 func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
@@ -330,11 +348,8 @@ func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []st
 			SET deleted_at = NOW(), updated_at = NOW()
 			WHERE id IN (%s)
 			  AND deleted_at IS NULL
-			  AND (
-			    created_by = $1
-			    OR project_id IN (
-			        SELECT id FROM projects WHERE owner_id = $1 AND deleted_at IS NULL
-			    )
+			  AND project_id IN (
+			      SELECT id FROM projects WHERE owner_id = $1 AND deleted_at IS NULL
 			  )
 			RETURNING id
 		)

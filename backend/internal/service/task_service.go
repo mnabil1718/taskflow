@@ -24,6 +24,7 @@ type TaskService interface {
 	BulkDelete(ctx context.Context, userID string, ids []string) (int, error)
 	Board(ctx context.Context, userID, projectID string) (*model.BoardView, error)
 	Update(ctx context.Context, userID, taskID string, req *model.UpdateTaskRequest) (*model.Task, error)
+	UpdateStatus(ctx context.Context, userID, taskID string, req *model.UpdateTaskStatusRequest) (*model.Task, error)
 	Move(ctx context.Context, userID, taskID string, req *model.MoveTaskRequest) (*model.Task, error)
 	Delete(ctx context.Context, userID, taskID string) error
 	Assign(ctx context.Context, userID, taskID string, req *model.AssignTaskRequest) (*model.Task, error)
@@ -38,6 +39,33 @@ type taskService struct {
 
 func NewTaskService(taskRepo repository.TaskRepository, projectRepo repository.ProjectRepository, hub *notifier.Hub) TaskService {
 	return &taskService{taskRepo: taskRepo, projectRepo: projectRepo, hub: hub}
+}
+
+// requireProjectOwner enforces "owner-only" on task mutations the caller
+// asks for. Returns the project on success. The error mapping is chosen
+// deliberately: callers who aren't even a member get ErrProjectNotFound
+// (so we don't leak project existence), while members who lack ownership
+// get ErrForbidden so the UI can show "you need to be the project owner"
+// rather than pretending the project doesn't exist.
+func (s *taskService) requireProjectOwner(ctx context.Context, projectID, userID string) (*model.Project, error) {
+	p, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, err
+	}
+	if p.OwnerID == userID {
+		return p, nil
+	}
+	isMember, mErr := s.projectRepo.IsMember(ctx, projectID, userID)
+	if mErr != nil {
+		return nil, mErr
+	}
+	if !isMember {
+		return nil, ErrProjectNotFound
+	}
+	return nil, ErrForbidden
 }
 
 // notify fans out a task event to every member of the task's project.
@@ -56,19 +84,8 @@ func (s *taskService) notify(ctx context.Context, projectID string, ev notifier.
 }
 
 func (s *taskService) Create(ctx context.Context, userID, projectID string, req *model.CreateTaskRequest) (*model.Task, error) {
-	if _, err := s.projectRepo.GetByID(ctx, projectID); err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil, ErrProjectNotFound
-		}
+	if _, err := s.requireProjectOwner(ctx, projectID, userID); err != nil {
 		return nil, err
-	}
-
-	isMember, err := s.projectRepo.IsMember(ctx, projectID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !isMember {
-		return nil, ErrProjectNotFound
 	}
 
 	if err := validateCreateTask(req); err != nil {
@@ -299,12 +316,13 @@ func (s *taskService) Update(ctx context.Context, userID, taskID string, req *mo
 		return nil, err
 	}
 
-	isMember, err := s.projectRepo.IsMember(ctx, t.ProjectID, userID)
-	if err != nil {
+	if _, err := s.requireProjectOwner(ctx, t.ProjectID, userID); err != nil {
+		// Hide task existence from non-members; show forbidden to members
+		// who aren't owner so the client can prompt "ask the owner".
+		if errors.Is(err, ErrProjectNotFound) {
+			return nil, ErrTaskNotFound
+		}
 		return nil, err
-	}
-	if !isMember {
-		return nil, ErrTaskNotFound
 	}
 
 	if err := validateUpdateTask(req); err != nil {
@@ -358,6 +376,62 @@ func (s *taskService) Update(ctx context.Context, userID, taskID string, req *mo
 	return t, nil
 }
 
+// UpdateStatus is the member-allowed status-only mutation. Any project
+// member (including the owner) can call it; the request shape can't even
+// express a non-status change, so the RBAC rule "members may only update
+// task status" is enforced by the API surface, not just the handler.
+// Re-uses the activity-log + notify side effects from Update so the
+// timeline and SSE stream stay consistent regardless of which endpoint
+// performed the status change.
+func (s *taskService) UpdateStatus(ctx context.Context, userID, taskID string, req *model.UpdateTaskStatusRequest) (*model.Task, error) {
+	t, err := s.taskRepo.GetByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, err
+	}
+
+	isMember, err := s.projectRepo.IsMember(ctx, t.ProjectID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, ErrTaskNotFound
+	}
+
+	if !isValidTaskStatus(req.Status) {
+		return nil, fmt.Errorf("%w: status must be 'todo', 'in_progress', or 'done'", ErrValidation)
+	}
+
+	prevStatus := t.Status
+	if prevStatus == req.Status {
+		// No-op, but still a successful response so the client can stop
+		// retrying. Skip the write and the activity log so we don't
+		// pollute the timeline with empty transitions.
+		return t, nil
+	}
+
+	t.Status = req.Status
+	if err := s.taskRepo.Update(ctx, t); err != nil {
+		return nil, err
+	}
+
+	changedBy := userID
+	if err := s.taskRepo.LogStatusChange(ctx, t.ID, &changedBy, prevStatus, t.Status); err != nil {
+		return nil, err
+	}
+
+	s.notify(ctx, t.ProjectID, notifier.Event{
+		Type:      notifier.EventTaskUpdated,
+		TaskID:    t.ID,
+		ProjectID: t.ProjectID,
+		Task:      t,
+	})
+
+	return t, nil
+}
+
 func (s *taskService) Delete(ctx context.Context, userID, taskID string) error {
 	t, err := s.taskRepo.GetByID(ctx, taskID)
 	if err != nil {
@@ -367,21 +441,11 @@ func (s *taskService) Delete(ctx context.Context, userID, taskID string) error {
 		return err
 	}
 
-	p, err := s.projectRepo.GetByID(ctx, t.ProjectID)
-	if err != nil {
+	if _, err := s.requireProjectOwner(ctx, t.ProjectID, userID); err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			return ErrTaskNotFound
+		}
 		return err
-	}
-
-	isMember, err := s.projectRepo.IsMember(ctx, t.ProjectID, userID)
-	if err != nil {
-		return err
-	}
-	if !isMember {
-		return ErrTaskNotFound
-	}
-
-	if p.OwnerID != userID && (t.CreatedBy == nil || *t.CreatedBy != userID) {
-		return ErrForbidden
 	}
 
 	if err := s.taskRepo.Delete(ctx, taskID); err != nil {
@@ -406,12 +470,11 @@ func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *mo
 		return nil, err
 	}
 
-	isMember, err := s.projectRepo.IsMember(ctx, t.ProjectID, userID)
-	if err != nil {
+	if _, err := s.requireProjectOwner(ctx, t.ProjectID, userID); err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			return nil, ErrTaskNotFound
+		}
 		return nil, err
-	}
-	if !isMember {
-		return nil, ErrTaskNotFound
 	}
 
 	assignee := normalizeUUIDPtr(req.AssigneeID)

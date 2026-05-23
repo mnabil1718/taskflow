@@ -158,6 +158,10 @@ export interface AssignTaskRequest {
   assignee_id: string | null;
 }
 
+export interface UpdateTaskStatusRequest {
+  status: TaskStatus;
+}
+
 export interface MoveTaskRequest {
   status: TaskStatus;
   position: string;

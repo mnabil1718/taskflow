@@ -35,6 +35,7 @@ import { TaskRowActions } from "@/components/tasks/task-row-actions";
 import { useProjects } from "@/hooks/use-projects";
 import { useAllTasks, useBulkDeleteTasks } from "@/hooks/use-tasks";
 import { useDebounced } from "@/hooks/use-debounced";
+import { useAuth } from "@/lib/auth-context";
 import { formatDate } from "@/lib/date-utils";
 import type { Task, TaskPriority, TaskStatus } from "@/lib/types";
 
@@ -60,7 +61,7 @@ const sortableColumns: Record<string, string> = {
     created_at: "created_at",
 };
 
-function buildColumns(projectMap: Map<string, string>) {
+function buildColumns(projectMap: Map<string, string>, ownedProjects: Set<string>) {
     const columnHelper = createColumnHelper<Task>();
 
     return [
@@ -189,6 +190,7 @@ function buildColumns(projectMap: Map<string, string>) {
                 <TaskRowActions
                     task={row.original}
                     projectId={row.original.project_id}
+                    isOwner={ownedProjects.has(row.original.project_id)}
                 />
             ),
         }),
@@ -220,6 +222,7 @@ export default function TasksPage() {
     const { data, isLoading, isFetching } = useAllTasks(filter);
     const bulkDelete = useBulkDeleteTasks();
     const { data: projectsData } = useProjects({ page: 1, limit: 100 });
+    const { user } = useAuth();
 
     const tasks = data?.items ?? [];
     const total = data?.total ?? 0;
@@ -229,7 +232,16 @@ export default function TasksPage() {
         projectsData?.items.map((p) => [p.id, p.name]) ?? []
     );
 
-    const columns = buildColumns(projectMap);
+    // Only owners can edit/delete tasks. Build a set of project IDs the
+    // current user owns so each row in this mixed feed can compute the
+    // right action affordances without re-checking on render.
+    const ownedProjects = new Set(
+        projectsData?.items
+            .filter((p) => p.owner_id === user?.id)
+            .map((p) => p.id) ?? []
+    );
+
+    const columns = buildColumns(projectMap, ownedProjects);
 
     const table = useReactTable({
         data: tasks,
@@ -308,7 +320,10 @@ export default function TasksPage() {
                 <div className="flex items-center justify-between gap-4">
                     <h2 className="text-lg font-semibold">All Tasks</h2>
                     <div className="flex items-center gap-2">
-                        {selectedCount > 0 && (
+                        {/* Bulk delete + Create are owner-only actions. They
+                            stay hidden when the user owns no projects so the
+                            UI doesn't dangle controls that would just 403. */}
+                        {ownedProjects.size > 0 && selectedCount > 0 && (
                             <Button
                                 variant="destructive"
                                 size="lg"
@@ -320,7 +335,7 @@ export default function TasksPage() {
                                 Delete {selectedCount} selected
                             </Button>
                         )}
-                        <CreateTaskGlobalDialog />
+                        {ownedProjects.size > 0 && <CreateTaskGlobalDialog />}
                     </div>
                 </div>
 

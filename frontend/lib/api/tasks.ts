@@ -9,6 +9,7 @@ import type {
   BulkDeleteTasksResponse,
   CreateTaskRequest,
   UpdateTaskRequest,
+  UpdateTaskStatusRequest,
   AssignTaskRequest,
   MoveTaskRequest,
 } from "../types";
@@ -57,6 +58,12 @@ export const tasksApi = {
 
   assign: (taskId: string, data: AssignTaskRequest): Promise<Task> =>
     apiRequest(`/tasks/${taskId}/assign`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  updateStatus: (taskId: string, data: UpdateTaskStatusRequest): Promise<Task> =>
+    apiRequest(`/tasks/${taskId}/status`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),

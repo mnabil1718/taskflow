@@ -383,6 +383,40 @@ func (h *TaskHandler) Assign(c *fiber.Ctx) error {
 	return response.Success(c, fiber.StatusOK, "task assignee updated", task)
 }
 
+// UpdateStatus godoc
+// @Summary      Update a task's status
+// @Description  Member-allowed status-only mutation. Any project member can
+// @Description  call this endpoint; non-status fields can't be changed here
+// @Description  (use PUT /tasks/{taskID} for that, which is owner-only).
+// @Description  The transition is recorded in the activity log.
+// @Tags         tasks
+// @Accept       json
+// @Produce      json
+// @Param        taskID  path     string                                  true "Task UUID"
+// @Param        request body     model.UpdateTaskStatusRequest           true "New status"
+// @Success      200     {object} response.Body{data=model.Task}          "Task status updated"
+// @Failure      400     {object} response.Body                           "Malformed body or invalid status"
+// @Failure      401     {object} response.Body                           "Missing or invalid token"
+// @Failure      404     {object} response.Body                           "Task not found or caller is not a project member"
+// @Failure      500     {object} response.Body                           "Internal server error"
+// @Security     BearerAuth
+// @Router       /tasks/{taskID}/status [patch]
+func (h *TaskHandler) UpdateStatus(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	var req model.UpdateTaskStatusRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+
+	task, err := h.svc.UpdateStatus(c.Context(), userID, c.Params("taskID"), &req)
+	if err != nil {
+		return h.handleServiceError(c, err)
+	}
+
+	return response.Success(c, fiber.StatusOK, "task status updated", task)
+}
+
 // Move godoc
 // @Summary      Move a task on the Kanban board
 // @Description  Updates a task's status and ordering position in one atomic write.
