@@ -4,7 +4,8 @@ import type {
   TaskPage,
   TaskFilter,
   BoardView,
-  TaskActivityLog,
+  TaskActivityLogPage,
+  TaskActivityLogParams,
   BulkDeleteTasksResponse,
   CreateTaskRequest,
   UpdateTaskRequest,
@@ -66,8 +67,16 @@ export const tasksApi = {
       body: JSON.stringify(data),
     }),
 
-  getActivityLogs: (taskId: string): Promise<TaskActivityLog[]> =>
-    apiRequest(`/tasks/${taskId}/activity`),
+  getActivityLogs: (
+    taskId: string,
+    params: TaskActivityLogParams = {}
+  ): Promise<TaskActivityLogPage> => {
+    const qs = new URLSearchParams();
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.before) qs.set("before", params.before);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return apiRequest(`/tasks/${taskId}/activity${suffix}`);
+  },
 
   bulkDelete: (ids: string[]): Promise<BulkDeleteTasksResponse> =>
     apiRequest(`/tasks/bulk-delete`, {

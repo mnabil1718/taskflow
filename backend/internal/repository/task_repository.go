@@ -32,7 +32,7 @@ type TaskRepository interface {
 	Move(ctx context.Context, id string, newStatus model.TaskStatus, newPosition string) (*model.Task, model.TaskStatus, error)
 	Delete(ctx context.Context, id string) error
 	LogStatusChange(ctx context.Context, taskID string, changedBy *string, from, to model.TaskStatus) error
-	GetActivityLogs(ctx context.Context, taskID string) ([]*model.TaskActivityLog, error)
+	GetActivityLogs(ctx context.Context, taskID string, filter model.TaskActivityLogFilter) ([]*model.TaskActivityLog, error)
 
 	PendingReminders(ctx context.Context, kind ReminderKind) ([]*model.Task, error)
 	MarkReminderSent(ctx context.Context, taskID string, kind ReminderKind) error
@@ -522,13 +522,31 @@ func (r *taskRepository) LogStatusChange(ctx context.Context, taskID string, cha
 	return nil
 }
 
-func (r *taskRepository) GetActivityLogs(ctx context.Context, taskID string) ([]*model.TaskActivityLog, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, task_id, changed_by, from_status, to_status, created_at
-		FROM task_activity_logs
-		WHERE task_id = $1
-		ORDER BY created_at DESC
-	`, taskID)
+// GetActivityLogs returns a slice of log entries ordered newest-first.
+// The caller passes filter.Before to paginate ("load older"): the oldest
+// CreatedAt currently rendered becomes the cursor for the next request.
+// LEFT JOIN users so the rendered feed can show "Jane changed status…"
+// without a per-row name lookup.
+func (r *taskRepository) GetActivityLogs(ctx context.Context, taskID string, filter model.TaskActivityLogFilter) ([]*model.TaskActivityLog, error) {
+	limit := filter.Limit
+	if limit < 1 {
+		limit = 10
+	}
+
+	args := []any{taskID, limit}
+	query := `
+		SELECT l.id, l.task_id, l.changed_by, u.name, l.from_status, l.to_status, l.created_at
+		FROM task_activity_logs l
+		LEFT JOIN users u ON u.id = l.changed_by
+		WHERE l.task_id = $1
+	`
+	if filter.Before != nil {
+		args = append(args, *filter.Before)
+		query += " AND l.created_at < $3"
+	}
+	query += " ORDER BY l.created_at DESC LIMIT $2"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get activity logs: %w", err)
 	}
@@ -537,12 +555,15 @@ func (r *taskRepository) GetActivityLogs(ctx context.Context, taskID string) ([]
 	logs := make([]*model.TaskActivityLog, 0)
 	for rows.Next() {
 		l := &model.TaskActivityLog{}
-		var changedBy sql.NullString
-		if err := rows.Scan(&l.ID, &l.TaskID, &changedBy, &l.FromStatus, &l.ToStatus, &l.CreatedAt); err != nil {
+		var changedBy, changedByName sql.NullString
+		if err := rows.Scan(&l.ID, &l.TaskID, &changedBy, &changedByName, &l.FromStatus, &l.ToStatus, &l.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan activity log: %w", err)
 		}
 		if changedBy.Valid {
 			l.ChangedBy = &changedBy.String
+		}
+		if changedByName.Valid {
+			l.ChangedByName = &changedByName.String
 		}
 		logs = append(logs, l)
 	}

@@ -27,7 +27,7 @@ type TaskService interface {
 	Move(ctx context.Context, userID, taskID string, req *model.MoveTaskRequest) (*model.Task, error)
 	Delete(ctx context.Context, userID, taskID string) error
 	Assign(ctx context.Context, userID, taskID string, req *model.AssignTaskRequest) (*model.Task, error)
-	GetActivityLogs(ctx context.Context, userID, taskID string) ([]*model.TaskActivityLog, error)
+	GetActivityLogs(ctx context.Context, userID, taskID string, filter model.TaskActivityLogFilter) (*model.TaskActivityLogPage, error)
 }
 
 type taskService struct {
@@ -452,7 +452,16 @@ func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *mo
 	return t, nil
 }
 
-func (s *taskService) GetActivityLogs(ctx context.Context, userID, taskID string) ([]*model.TaskActivityLog, error) {
+// activityLogDefaultLimit / activityLogMaxLimit cap the page size so an
+// over-eager client can't pull the whole table in one request. The default
+// is small (10) because the task detail page renders a feed and trusts the
+// "Load more" pattern to fetch the rest only if the user asks.
+const (
+	activityLogDefaultLimit = 10
+	activityLogMaxLimit     = 100
+)
+
+func (s *taskService) GetActivityLogs(ctx context.Context, userID, taskID string, filter model.TaskActivityLogFilter) (*model.TaskActivityLogPage, error) {
 	t, err := s.taskRepo.GetByID(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -469,7 +478,28 @@ func (s *taskService) GetActivityLogs(ctx context.Context, userID, taskID string
 		return nil, ErrTaskNotFound
 	}
 
-	return s.taskRepo.GetActivityLogs(ctx, taskID)
+	requested := filter.Limit
+	if requested < 1 {
+		requested = activityLogDefaultLimit
+	}
+	if requested > activityLogMaxLimit {
+		requested = activityLogMaxLimit
+	}
+	// Over-fetch by one so we know whether another page exists without
+	// having to issue a second query. The extra row is sliced off before
+	// returning to the caller.
+	filter.Limit = requested + 1
+
+	logs, err := s.taskRepo.GetActivityLogs(ctx, taskID, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	hasMore := len(logs) > requested
+	if hasMore {
+		logs = logs[:requested]
+	}
+	return &model.TaskActivityLogPage{Items: logs, HasMore: hasMore}, nil
 }
 
 func validateCreateTask(req *model.CreateTaskRequest) error {

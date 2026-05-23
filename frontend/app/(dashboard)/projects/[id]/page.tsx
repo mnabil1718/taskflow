@@ -99,6 +99,14 @@ function buildColumns(members: ProjectMember[], projectId: string) {
         columnHelper.accessor("title", {
             header: "Title",
             meta: { cellClassName: "max-w-xs", cellInnerClassName: "truncate" },
+            cell: (info) => (
+                <Link
+                    href={`/tasks/${info.row.original.id}`}
+                    className="text-sm font-medium hover:underline"
+                >
+                    {info.getValue()}
+                </Link>
+            ),
         }),
         columnHelper.accessor("description", {
             header: "Description",
