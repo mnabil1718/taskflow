@@ -167,9 +167,20 @@ export interface TaskActivityLog {
   id: string;
   task_id: string;
   changed_by?: string;
+  changed_by_name?: string;
   from_status: TaskStatus;
   to_status: TaskStatus;
   created_at: string;
+}
+
+export interface TaskActivityLogPage {
+  items: TaskActivityLog[];
+  has_more: boolean;
+}
+
+export interface TaskActivityLogParams {
+  before?: string;
+  limit?: number;
 }
 
 export interface BulkDeleteTasksResponse {

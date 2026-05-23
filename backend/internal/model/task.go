@@ -33,12 +33,29 @@ type Task struct {
 }
 
 type TaskActivityLog struct {
-	ID         string     `json:"id"                    example:"5b5a7c2c-1d3e-4d3a-9b8c-aab0cf2d99aa"`
-	TaskID     string     `json:"task_id"               example:"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
-	ChangedBy  *string    `json:"changed_by,omitempty"  example:"6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f"`
-	FromStatus TaskStatus `json:"from_status"           example:"todo"`
-	ToStatus   TaskStatus `json:"to_status"             example:"in_progress"`
-	CreatedAt  time.Time  `json:"created_at"            example:"2026-05-20T10:00:00Z"`
+	ID            string     `json:"id"                       example:"5b5a7c2c-1d3e-4d3a-9b8c-aab0cf2d99aa"`
+	TaskID        string     `json:"task_id"                  example:"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
+	ChangedBy     *string    `json:"changed_by,omitempty"     example:"6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f"`
+	ChangedByName *string    `json:"changed_by_name,omitempty" example:"Jane Doe"`
+	FromStatus    TaskStatus `json:"from_status"              example:"todo"`
+	ToStatus      TaskStatus `json:"to_status"                example:"in_progress"`
+	CreatedAt     time.Time  `json:"created_at"               example:"2026-05-20T10:00:00Z"`
+}
+
+// TaskActivityLogPage is the paginated envelope returned by the activity
+// logs endpoint. HasMore lets the client know whether another "Load more"
+// click would yield results without having to fetch and discover empty.
+type TaskActivityLogPage struct {
+	Items   []*TaskActivityLog `json:"items"`
+	HasMore bool               `json:"has_more"  example:"true"`
+}
+
+// TaskActivityLogFilter narrows a paginated activity-log read.
+// Before is a cursor — pass the CreatedAt of the oldest entry you have
+// to fetch the next page.
+type TaskActivityLogFilter struct {
+	Before *time.Time
+	Limit  int
 }
 
 type CreateTaskRequest struct {

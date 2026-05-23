@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mnabil1718/taskflow/internal/model"
@@ -418,25 +419,45 @@ func (h *TaskHandler) Move(c *fiber.Ctx) error {
 // GetActivityLogs godoc
 // @Summary      List a task's status-change history
 // @Description  Returns the task's status-transition log in reverse chronological order.
-// @Description  The caller must be a member of the task's project.
+// @Description  The caller must be a member of the task's project. Cursor pagination via
+// @Description  `before`: pass the CreatedAt of the oldest entry currently rendered to
+// @Description  fetch the next page. The envelope reports has_more so the UI can decide
+// @Description  whether to show "Load more".
 // @Tags         tasks
 // @Produce      json
-// @Param        taskID path     string                                          true "Task UUID"
-// @Success      200    {object} response.Body{data=[]model.TaskActivityLog}     "Activity logs retrieved"
-// @Failure      401    {object} response.Body                                   "Missing or invalid token"
-// @Failure      404    {object} response.Body                                   "Task not found or caller is not a project member"
-// @Failure      500    {object} response.Body                                   "Internal server error"
+// @Param        taskID path     string                                              true  "Task UUID"
+// @Param        limit  query    int                                                 false "Page size (default 10, max 100)"
+// @Param        before query    string                                              false "RFC3339 cursor — fetch entries created before this time"
+// @Success      200    {object} response.Body{data=model.TaskActivityLogPage}       "Activity logs retrieved"
+// @Failure      400    {object} response.Body                                       "Invalid cursor"
+// @Failure      401    {object} response.Body                                       "Missing or invalid token"
+// @Failure      404    {object} response.Body                                       "Task not found or caller is not a project member"
+// @Failure      500    {object} response.Body                                       "Internal server error"
 // @Security     BearerAuth
 // @Router       /tasks/{taskID}/activity [get]
 func (h *TaskHandler) GetActivityLogs(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 
-	logs, err := h.svc.GetActivityLogs(c.Context(), userID, c.Params("taskID"))
+	filter := model.TaskActivityLogFilter{}
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			filter.Limit = n
+		}
+	}
+	if v := c.Query("before"); v != "" {
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return response.Error(c, fiber.StatusBadRequest, "invalid before cursor; must be RFC3339")
+		}
+		filter.Before = &t
+	}
+
+	page, err := h.svc.GetActivityLogs(c.Context(), userID, c.Params("taskID"), filter)
 	if err != nil {
 		return h.handleServiceError(c, err)
 	}
 
-	return response.Success(c, fiber.StatusOK, "activity logs retrieved", logs)
+	return response.Success(c, fiber.StatusOK, "activity logs retrieved", page)
 }
 
 func (h *TaskHandler) handleServiceError(c *fiber.Ctx, err error) error {
