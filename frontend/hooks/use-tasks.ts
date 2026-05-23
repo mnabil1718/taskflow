@@ -12,11 +12,15 @@ import type {
     UpdateTaskRequest,
 } from "@/lib/types";
 
+// Prefix shared by all global task list cache entries — used to invalidate
+// the /tasks page without knowing the exact filter params.
+const GLOBAL_TASKS_KEY = ["tasks", "all"] as const;
+
 export const taskKeys = {
     all: (projectId: string) => ["projects", projectId, "tasks"] as const,
     list: (projectId: string, filter: TaskFilter) =>
         ["projects", projectId, "tasks", "list", filter] as const,
-    allTasks: (filter: TaskFilter) => ["tasks", "all", filter] as const,
+    allTasks: (filter: TaskFilter) => [...GLOBAL_TASKS_KEY, filter] as const,
 };
 
 export function useAllTasks(filter: TaskFilter = {}) {
@@ -44,6 +48,7 @@ export function useCreateTask(projectId: string) {
         mutationFn: (data: CreateTaskRequest) => tasksApi.create(projectId, data),
         onSuccess: (task) => {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             toast.success(`Task "${task.title}" created`);
         },
@@ -57,6 +62,7 @@ export function useUpdateTask(projectId: string) {
             tasksApi.update(id, data),
         onSuccess: (task) => {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             toast.success(`Task "${task.title}" updated`);
         },
@@ -69,8 +75,22 @@ export function useDeleteTask(projectId: string) {
         mutationFn: (taskId: string) => tasksApi.delete(taskId),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             toast.success("Task deleted");
+        },
+    });
+}
+
+export function useBulkDeleteTasks() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (ids: string[]) => tasksApi.bulkDelete(ids),
+        onSuccess: ({ deleted_count }) => {
+            qc.invalidateQueries({ queryKey: ["projects"] });
+            qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
+            qc.invalidateQueries({ queryKey: ["dashboard"] });
+            toast.success(`Deleted ${deleted_count} task${deleted_count === 1 ? "" : "s"}`);
         },
     });
 }

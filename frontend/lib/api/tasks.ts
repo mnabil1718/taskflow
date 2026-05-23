@@ -5,6 +5,7 @@ import type {
   TaskFilter,
   BoardView,
   TaskActivityLog,
+  BulkDeleteTasksResponse,
   CreateTaskRequest,
   UpdateTaskRequest,
   AssignTaskRequest,
@@ -67,4 +68,10 @@ export const tasksApi = {
 
   getActivityLogs: (taskId: string): Promise<TaskActivityLog[]> =>
     apiRequest(`/tasks/${taskId}/activity`),
+
+  bulkDelete: (ids: string[]): Promise<BulkDeleteTasksResponse> =>
+    apiRequest(`/tasks/bulk-delete`, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
 };

@@ -8,11 +8,24 @@ import {
     getSortedRowModel,
     createColumnHelper,
     type SortingState,
+    type RowSelectionState,
 } from "@tanstack/react-table";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Trash2 } from "lucide-react";
 
 import { AppNavbar } from "@/components/app-navbar";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Select,
     SelectContent,
@@ -25,7 +38,7 @@ import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaginationControls } from "@/components/pagination-controls";
 import { CreateTaskGlobalDialog } from "@/components/tasks/create-task-global-dialog";
 import { useProjects } from "@/hooks/use-projects";
-import { useAllTasks } from "@/hooks/use-tasks";
+import { useAllTasks, useBulkDeleteTasks } from "@/hooks/use-tasks";
 import { useDebounced } from "@/hooks/use-debounced";
 import { formatDate } from "@/lib/date-utils";
 import type { Task, TaskPriority, TaskStatus } from "@/lib/types";
@@ -56,6 +69,26 @@ function buildColumns(projectMap: Map<string, string>) {
     const columnHelper = createColumnHelper<Task>();
 
     return [
+        columnHelper.display({
+            id: "select",
+            meta: { headerClassName: "w-[40px]", cellClassName: "w-[40px]" },
+            header: ({ table }) => (
+                <Checkbox
+                    checked={table.getIsAllPageRowsSelected()}
+                    indeterminate={table.getIsSomePageRowsSelected()}
+                    onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+                    aria-label="Select all on page"
+                />
+            ),
+            cell: ({ row }) => (
+                <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(v) => row.toggleSelected(!!v)}
+                    aria-label={`Select ${row.original.title}`}
+                />
+            ),
+            enableSorting: false,
+        }),
         columnHelper.accessor("title", {
             header: "Title",
             meta: { cellClassName: "max-w-xs", cellInnerClassName: "truncate" },
@@ -133,9 +166,11 @@ function buildColumns(projectMap: Map<string, string>) {
 export default function TasksPage() {
     const [page, setPage] = useState(1);
     const [sorting, setSorting] = useState<SortingState>([]);
+    const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const [searchInput, setSearchInput] = useState("");
     const [statusFilter, setStatusFilter] = useState<TaskStatus | "">("");
     const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "">("");
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     const search = useDebounced(searchInput, 300);
 
@@ -151,6 +186,7 @@ export default function TasksPage() {
     };
 
     const { data, isLoading, isFetching } = useAllTasks(filter);
+    const bulkDelete = useBulkDeleteTasks();
     const { data: projectsData } = useProjects({ page: 1, limit: 100 });
 
     const tasks = data?.items ?? [];
@@ -166,16 +202,27 @@ export default function TasksPage() {
     const table = useReactTable({
         data: tasks,
         columns,
-        state: { sorting },
+        state: { sorting, rowSelection },
         onSortingChange: (updater) => {
             setSorting(updater);
             setPage(1);
         },
+        onRowSelectionChange: setRowSelection,
         getRowId: (row) => row.id,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         manualSorting: true,
+        enableRowSelection: true,
     });
+
+    const selectedIds = Object.keys(rowSelection);
+    const selectedCount = selectedIds.length;
+
+    const handleConfirmDelete = async () => {
+        await bulkDelete.mutateAsync(selectedIds);
+        setRowSelection({});
+        setConfirmOpen(false);
+    };
 
     const handleSearchChange = (value: string) => {
         setSearchInput(value);
@@ -227,10 +274,25 @@ export default function TasksPage() {
     return (
         <>
             <AppNavbar title="Tasks" />
+
             <main className="flex-1 overflow-y-auto p-6 space-y-4">
                 <div className="flex items-center justify-between gap-4">
                     <h2 className="text-lg font-semibold">All Tasks</h2>
-                    <CreateTaskGlobalDialog />
+                    <div className="flex items-center gap-2">
+                        {selectedCount > 0 && (
+                            <Button
+                                variant="destructive"
+                                size="lg"
+                                onClick={() => setConfirmOpen(true)}
+                                disabled={bulkDelete.isPending}
+                                className="px-4!"
+                            >
+                                <Trash2 className="size-4" />
+                                Delete {selectedCount} selected
+                            </Button>
+                        )}
+                        <CreateTaskGlobalDialog />
+                    </div>
                 </div>
 
                 <DataTable
@@ -259,6 +321,32 @@ export default function TasksPage() {
                     disabled={isFetching}
                 />
             </main>
+            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Delete {selectedCount} task{selectedCount === 1 ? "" : "s"}?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Only tasks you created or projects you own will be deleted.
+                            Others in the selection will be skipped.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={bulkDelete.isPending}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleConfirmDelete();
+                            }}
+                            disabled={bulkDelete.isPending}
+                            className="bg-destructive text-white hover:bg-destructive/90"
+                        >
+                            {bulkDelete.isPending ? "Deleting…" : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }

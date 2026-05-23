@@ -170,6 +170,10 @@ export interface TaskActivityLog {
   created_at: string;
 }
 
+export interface BulkDeleteTasksResponse {
+  deleted_count: number;
+}
+
 export interface BoardView {
   todo: Task[];
   in_progress: Task[];
