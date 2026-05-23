@@ -37,6 +37,7 @@ import { DataTable } from "@/components/data-table";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaginationControls } from "@/components/pagination-controls";
 import { CreateTaskGlobalDialog } from "@/components/tasks/create-task-global-dialog";
+import { TaskRowActions } from "@/components/tasks/task-row-actions";
 import { useProjects } from "@/hooks/use-projects";
 import { useAllTasks, useBulkDeleteTasks } from "@/hooks/use-tasks";
 import { useDebounced } from "@/hooks/use-debounced";
@@ -158,6 +159,17 @@ function buildColumns(projectMap: Map<string, string>) {
                 <span className="text-muted-foreground whitespace-nowrap">
                     {formatDate(info.getValue())}
                 </span>
+            ),
+        }),
+        columnHelper.display({
+            id: "actions",
+            header: "Actions",
+            enableSorting: false,
+            cell: ({ row }) => (
+                <TaskRowActions
+                    task={row.original}
+                    projectId={row.original.project_id}
+                />
             ),
         }),
     ];

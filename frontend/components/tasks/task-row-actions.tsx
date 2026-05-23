@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 
 import { useDeleteTask } from "@/hooks/use-tasks";
+import { useProjectMembers } from "@/hooks/use-projects";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -30,12 +31,17 @@ type ActiveDialog = "edit" | "delete" | null;
 interface TaskRowActionsProps {
     task: Task;
     projectId: string;
-    members: ProjectMember[];
+    /** Pass pre-loaded members to avoid an extra fetch; omit to auto-fetch. */
+    members?: ProjectMember[];
 }
 
-export function TaskRowActions({ task, projectId, members }: TaskRowActionsProps) {
+export function TaskRowActions({ task, projectId, members: propMembers }: TaskRowActionsProps) {
     const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
     const deleteTask = useDeleteTask(projectId);
+    const { data: fetchedMembers = [] } = useProjectMembers(
+        propMembers === undefined ? projectId : ""
+    );
+    const members = propMembers ?? fetchedMembers;
 
     const handleDelete = async () => {
         await deleteTask.mutateAsync(task.id);
