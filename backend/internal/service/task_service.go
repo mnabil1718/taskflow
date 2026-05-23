@@ -162,22 +162,30 @@ func (s *taskService) List(ctx context.Context, userID, projectID string, filter
 		return nil, 0, ErrProjectNotFound
 	}
 
-	if filter.Status != "" && !isValidTaskStatus(filter.Status) {
-		return nil, 0, fmt.Errorf("%w: status must be 'todo', 'in_progress', or 'done'", ErrValidation)
+	for _, s := range filter.Statuses {
+		if !isValidTaskStatus(s) {
+			return nil, 0, fmt.Errorf("%w: status must be 'todo', 'in_progress', or 'done'", ErrValidation)
+		}
 	}
-	if filter.Priority != "" && !isValidTaskPriority(filter.Priority) {
-		return nil, 0, fmt.Errorf("%w: priority must be 'low', 'medium', or 'high'", ErrValidation)
+	for _, p := range filter.Priorities {
+		if !isValidTaskPriority(p) {
+			return nil, 0, fmt.Errorf("%w: priority must be 'low', 'medium', or 'high'", ErrValidation)
+		}
 	}
 
 	return s.taskRepo.List(ctx, projectID, filter)
 }
 
 func (s *taskService) ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error) {
-	if filter.Status != "" && !isValidTaskStatus(filter.Status) {
-		return nil, 0, fmt.Errorf("%w: status must be 'todo', 'in_progress', or 'done'", ErrValidation)
+	for _, s := range filter.Statuses {
+		if !isValidTaskStatus(s) {
+			return nil, 0, fmt.Errorf("%w: status must be 'todo', 'in_progress', or 'done'", ErrValidation)
+		}
 	}
-	if filter.Priority != "" && !isValidTaskPriority(filter.Priority) {
-		return nil, 0, fmt.Errorf("%w: priority must be 'low', 'medium', or 'high'", ErrValidation)
+	for _, p := range filter.Priorities {
+		if !isValidTaskPriority(p) {
+			return nil, 0, fmt.Errorf("%w: priority must be 'low', 'medium', or 'high'", ErrValidation)
+		}
 	}
 	return s.taskRepo.ListAll(ctx, userID, filter)
 }

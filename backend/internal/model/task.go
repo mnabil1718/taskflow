@@ -61,8 +61,8 @@ type UpdateTaskRequest struct {
 }
 
 type TaskFilter struct {
-	Status     TaskStatus
-	Priority   TaskPriority
+	Statuses   []TaskStatus
+	Priorities []TaskPriority
 	AssigneeID string
 	Search     string
 	SortBy     string

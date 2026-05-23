@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"net/url"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -93,9 +94,23 @@ func (h *TaskHandler) List(c *fiber.Ctx) error {
 		limit = 10
 	}
 
+	qv, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	var statuses []model.TaskStatus
+	for _, s := range qv["status"] {
+		if s != "" {
+			statuses = append(statuses, model.TaskStatus(s))
+		}
+	}
+	var priorities []model.TaskPriority
+	for _, p := range qv["priority"] {
+		if p != "" {
+			priorities = append(priorities, model.TaskPriority(p))
+		}
+	}
+
 	filter := model.TaskFilter{
-		Status:     model.TaskStatus(c.Query("status")),
-		Priority:   model.TaskPriority(c.Query("priority")),
+		Statuses:   statuses,
+		Priorities: priorities,
 		AssigneeID: c.Query("assignee_id"),
 		Search:     c.Query("q"),
 		SortBy:     c.Query("sort_by"),
@@ -155,9 +170,23 @@ func (h *TaskHandler) ListAll(c *fiber.Ctx) error {
 		limit = 10
 	}
 
+	qv, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
+	var statuses []model.TaskStatus
+	for _, s := range qv["status"] {
+		if s != "" {
+			statuses = append(statuses, model.TaskStatus(s))
+		}
+	}
+	var priorities []model.TaskPriority
+	for _, p := range qv["priority"] {
+		if p != "" {
+			priorities = append(priorities, model.TaskPriority(p))
+		}
+	}
+
 	filter := model.TaskFilter{
-		Status:     model.TaskStatus(c.Query("status")),
-		Priority:   model.TaskPriority(c.Query("priority")),
+		Statuses:   statuses,
+		Priorities: priorities,
 		AssigneeID: c.Query("assignee_id"),
 		Search:     c.Query("q"),
 		SortBy:     c.Query("sort_by"),

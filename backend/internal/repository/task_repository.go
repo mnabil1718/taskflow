@@ -134,15 +134,23 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	args := []any{projectID}
 	idx := 2
 
-	if filter.Status != "" {
-		conds = append(conds, fmt.Sprintf("status = $%d", idx))
-		args = append(args, filter.Status)
-		idx++
+	if len(filter.Statuses) > 0 {
+		placeholders := make([]string, len(filter.Statuses))
+		for i, s := range filter.Statuses {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(s))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("status IN (%s)", strings.Join(placeholders, ", ")))
 	}
-	if filter.Priority != "" {
-		conds = append(conds, fmt.Sprintf("priority = $%d", idx))
-		args = append(args, filter.Priority)
-		idx++
+	if len(filter.Priorities) > 0 {
+		placeholders := make([]string, len(filter.Priorities))
+		for i, p := range filter.Priorities {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(p))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("priority IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	if filter.AssigneeID != "" {
 		conds = append(conds, fmt.Sprintf("assignee_id = $%d", idx))
@@ -210,15 +218,23 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	args := []any{userID}
 	idx := 2
 
-	if filter.Status != "" {
-		conds = append(conds, fmt.Sprintf("t.status = $%d", idx))
-		args = append(args, filter.Status)
-		idx++
+	if len(filter.Statuses) > 0 {
+		placeholders := make([]string, len(filter.Statuses))
+		for i, s := range filter.Statuses {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(s))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("t.status IN (%s)", strings.Join(placeholders, ", ")))
 	}
-	if filter.Priority != "" {
-		conds = append(conds, fmt.Sprintf("t.priority = $%d", idx))
-		args = append(args, filter.Priority)
-		idx++
+	if len(filter.Priorities) > 0 {
+		placeholders := make([]string, len(filter.Priorities))
+		for i, p := range filter.Priorities {
+			placeholders[i] = fmt.Sprintf("$%d", idx)
+			args = append(args, string(p))
+			idx++
+		}
+		conds = append(conds, fmt.Sprintf("t.priority IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	if filter.AssigneeID != "" {
 		conds = append(conds, fmt.Sprintf("t.assignee_id = $%d", idx))
