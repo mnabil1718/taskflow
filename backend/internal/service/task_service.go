@@ -20,6 +20,7 @@ type TaskService interface {
 	Create(ctx context.Context, userID, projectID string, req *model.CreateTaskRequest) (*model.Task, error)
 	GetByID(ctx context.Context, userID, taskID string) (*model.Task, error)
 	List(ctx context.Context, userID, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error)
 	Board(ctx context.Context, userID, projectID string) (*model.BoardView, error)
 	Update(ctx context.Context, userID, taskID string, req *model.UpdateTaskRequest) (*model.Task, error)
 	Move(ctx context.Context, userID, taskID string, req *model.MoveTaskRequest) (*model.Task, error)
@@ -168,6 +169,16 @@ func (s *taskService) List(ctx context.Context, userID, projectID string, filter
 	}
 
 	return s.taskRepo.List(ctx, projectID, filter)
+}
+
+func (s *taskService) ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error) {
+	if filter.Status != "" && !isValidTaskStatus(filter.Status) {
+		return nil, 0, fmt.Errorf("%w: status must be 'todo', 'in_progress', or 'done'", ErrValidation)
+	}
+	if filter.Priority != "" && !isValidTaskPriority(filter.Priority) {
+		return nil, 0, fmt.Errorf("%w: priority must be 'low', 'medium', or 'high'", ErrValidation)
+	}
+	return s.taskRepo.ListAll(ctx, userID, filter)
 }
 
 func (s *taskService) Board(ctx context.Context, userID, projectID string) (*model.BoardView, error) {

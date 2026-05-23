@@ -64,6 +64,7 @@ type TaskFilter struct {
 	Status     TaskStatus
 	Priority   TaskPriority
 	AssigneeID string
+	Search     string
 	SortBy     string
 	SortOrder  string
 	Page       int

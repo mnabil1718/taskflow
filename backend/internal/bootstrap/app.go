@@ -84,6 +84,7 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 	projects.Get("/:id/board", task.Board)
 
 	tasks := protected.Group("/tasks")
+	tasks.Get("", task.ListAll)
 	tasks.Get("/:taskID", task.GetByID)
 	tasks.Put("/:taskID", task.Update)
 	tasks.Delete("/:taskID", task.Delete)

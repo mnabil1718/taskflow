@@ -24,6 +24,7 @@ type TaskRepository interface {
 	Create(ctx context.Context, t *model.Task) error
 	GetByID(ctx context.Context, id string) (*model.Task, error)
 	List(ctx context.Context, projectID string, filter model.TaskFilter) ([]*model.Task, int, error)
+	ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error)
 	BoardList(ctx context.Context, projectID string) ([]*model.Task, error)
 	Update(ctx context.Context, t *model.Task) error
 	UpdateAssignee(ctx context.Context, id string, assigneeID *string) error
@@ -147,6 +148,11 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 		args = append(args, filter.AssigneeID)
 		idx++
 	}
+	if filter.Search != "" {
+		conds = append(conds, fmt.Sprintf("title ILIKE $%d", idx))
+		args = append(args, "%"+filter.Search+"%")
+		idx++
+	}
 
 	where := strings.Join(conds, " AND ")
 
@@ -171,6 +177,89 @@ func (r *taskRepository) List(ctx context.Context, projectID string, filter mode
 	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list tasks: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := make([]*model.Task, 0)
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan task: %w", err)
+		}
+		tasks = append(tasks, t)
+	}
+
+	return tasks, total, rows.Err()
+}
+
+// ListAll returns a paginated list of tasks across every project the given
+// user is a member of. Supports the same filters as List.
+func (r *taskRepository) ListAll(ctx context.Context, userID string, filter model.TaskFilter) ([]*model.Task, int, error) {
+	page := filter.Page
+	limit := filter.Limit
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	conds := []string{"pm.user_id = $1"}
+	args := []any{userID}
+	idx := 2
+
+	if filter.Status != "" {
+		conds = append(conds, fmt.Sprintf("t.status = $%d", idx))
+		args = append(args, filter.Status)
+		idx++
+	}
+	if filter.Priority != "" {
+		conds = append(conds, fmt.Sprintf("t.priority = $%d", idx))
+		args = append(args, filter.Priority)
+		idx++
+	}
+	if filter.AssigneeID != "" {
+		conds = append(conds, fmt.Sprintf("t.assignee_id = $%d", idx))
+		args = append(args, filter.AssigneeID)
+		idx++
+	}
+	if filter.Search != "" {
+		conds = append(conds, fmt.Sprintf("t.title ILIKE $%d", idx))
+		args = append(args, "%"+filter.Search+"%")
+		idx++
+	}
+
+	where := strings.Join(conds, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM tasks t
+		JOIN project_members pm ON pm.project_id = t.project_id
+		WHERE %s
+	`, where)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count all tasks: %w", err)
+	}
+
+	sortCol, sortDir := taskSortClause(filter.SortBy, filter.SortOrder)
+
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, limit, offset)
+	listQuery := fmt.Sprintf(`
+		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
+		       t.project_id, t.assignee_id, t.created_by, t.due_date, t.created_at, t.updated_at
+		FROM tasks t
+		JOIN project_members pm ON pm.project_id = t.project_id
+		WHERE %s
+		ORDER BY t.%s %s NULLS LAST, t.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, where, sortCol, sortDir, idx, idx+1)
+
+	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list all tasks: %w", err)
 	}
 	defer rows.Close()
 
