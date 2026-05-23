@@ -351,7 +351,7 @@ export default function ProjectDetailPage() {
                                 <DataTableToolbar
                                     searchValue={searchInput}
                                     onSearchChange={handleSearchChange}
-                                    searchPlaceholder="Search tasks…"
+                                    searchPlaceholder="Search by title or assignee…"
                                 >
                                     <FilterMultiSelect
                                         placeholder="All statuses"
