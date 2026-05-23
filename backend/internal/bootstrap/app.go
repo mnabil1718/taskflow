@@ -15,7 +15,7 @@ import (
 	"github.com/mnabil1718/taskflow/internal/service"
 )
 
-func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler, user *handler.UserHandler) *fiber.App {
+func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler, user *handler.UserHandler, trash *handler.TrashHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ReadBufferSize: 16 * 1024,
 	})
@@ -35,7 +35,7 @@ func NewApp(cfg *config.Config, authSvc service.AuthService, health *handler.Hea
 		},
 	}))
 
-	registerRoutes(app, authSvc, health, auth, project, task, dashboard, notif, user)
+	registerRoutes(app, authSvc, health, auth, project, task, dashboard, notif, user, trash)
 	return app
 }
 
@@ -52,7 +52,7 @@ func rateLimiter(max int, expiration time.Duration) fiber.Handler {
 	})
 }
 
-func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler, user *handler.UserHandler) {
+func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler.HealthHandler, auth *handler.AuthHandler, project *handler.ProjectHandler, task *handler.TaskHandler, dashboard *handler.DashboardHandler, notif *handler.NotificationHandler, user *handler.UserHandler, trash *handler.TrashHandler) {
 	app.Get("/health", health.Check)
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
@@ -102,4 +102,10 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 
 	users := protected.Group("/users")
 	users.Get("/search", user.Search)
+
+	trashGroup := protected.Group("/trash")
+	trashGroup.Get("", trash.List)
+	trashGroup.Delete("", trash.EmptyAll)
+	trashGroup.Post("/restore", trash.Restore)
+	trashGroup.Post("/purge", trash.Purge)
 }
