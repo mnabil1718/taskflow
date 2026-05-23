@@ -124,8 +124,8 @@ export interface TaskPage {
 }
 
 export interface TaskFilter {
-  status?: TaskStatus;
-  priority?: TaskPriority;
+  status?: TaskStatus[];
+  priority?: TaskPriority[];
   assignee_id?: string;
   search?: string;
   sort_by?: string;

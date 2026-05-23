@@ -27,17 +27,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/data-table";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
+import { FilterMultiSelect } from "@/components/filter-multi-select";
 import { PaginationControls } from "@/components/pagination-controls";
 import { ProjectMembersPanel } from "@/components/projects/project-members-panel";
 import { ProjectMetadataForm } from "@/components/projects/project-metadata-form";
@@ -201,8 +195,8 @@ export default function ProjectDetailPage() {
     const [sorting, setSorting] = useState<SortingState>([]);
     const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
     const [searchInput, setSearchInput] = useState("");
-    const [statusFilter, setStatusFilter] = useState<TaskStatus | "">("");
-    const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "">("");
+    const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([]);
+    const [priorityFilter, setPriorityFilter] = useState<TaskPriority[]>([]);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [settingsSection, setSettingsSection] = useState<SettingsSection>("details");
     const [deleteProjectOpen, setDeleteProjectOpen] = useState(false);
@@ -214,8 +208,8 @@ export default function ProjectDetailPage() {
         page,
         limit: PAGE_SIZE,
         search: search || undefined,
-        status: statusFilter || undefined,
-        priority: priorityFilter || undefined,
+        status: statusFilter.length > 0 ? statusFilter : undefined,
+        priority: priorityFilter.length > 0 ? priorityFilter : undefined,
         sort_by: sortCol ? sortableColumns[sortCol.id] : undefined,
         sort_order: sortCol ? (sortCol.desc ? "desc" : "asc") as "asc" | "desc" : undefined,
     };
@@ -269,13 +263,13 @@ export default function ProjectDetailPage() {
         setPage(1);
     };
 
-    const handleStatusChange = (val: string | null) => {
-        setStatusFilter(!val || val === "all" ? "" : val as TaskStatus);
+    const handleStatusChange = (vals: string[]) => {
+        setStatusFilter(vals as TaskStatus[]);
         setPage(1);
     };
 
-    const handlePriorityChange = (val: string | null) => {
-        setPriorityFilter(!val || val === "all" ? "" : val as TaskPriority);
+    const handlePriorityChange = (vals: string[]) => {
+        setPriorityFilter(vals as TaskPriority[]);
         setPage(1);
     };
 
@@ -354,28 +348,26 @@ export default function ProjectDetailPage() {
                                     onSearchChange={handleSearchChange}
                                     searchPlaceholder="Search tasks…"
                                 >
-                                    <Select value={statusFilter || "all"} onValueChange={handleStatusChange}>
-                                        <SelectTrigger className="w-36">
-                                            <SelectValue placeholder="All statuses" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All statuses</SelectItem>
-                                            <SelectItem value="todo">To Do</SelectItem>
-                                            <SelectItem value="in_progress">In Progress</SelectItem>
-                                            <SelectItem value="done">Done</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={priorityFilter || "all"} onValueChange={handlePriorityChange}>
-                                        <SelectTrigger className="w-36">
-                                            <SelectValue placeholder="All priorities" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All priorities</SelectItem>
-                                            <SelectItem value="low">Low</SelectItem>
-                                            <SelectItem value="medium">Medium</SelectItem>
-                                            <SelectItem value="high">High</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <FilterMultiSelect
+                                        placeholder="All statuses"
+                                        options={[
+                                            { value: "todo", label: "To Do" },
+                                            { value: "in_progress", label: "In Progress" },
+                                            { value: "done", label: "Done" },
+                                        ]}
+                                        value={statusFilter}
+                                        onChange={handleStatusChange}
+                                    />
+                                    <FilterMultiSelect
+                                        placeholder="All priorities"
+                                        options={[
+                                            { value: "low", label: "Low" },
+                                            { value: "medium", label: "Medium" },
+                                            { value: "high", label: "High" },
+                                        ]}
+                                        value={priorityFilter}
+                                        onChange={handlePriorityChange}
+                                    />
                                 </DataTableToolbar>
                             }
                             empty={

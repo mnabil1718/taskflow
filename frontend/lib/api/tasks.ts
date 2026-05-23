@@ -14,8 +14,8 @@ import type {
 
 function toQueryString(filter: TaskFilter): string {
   const params = new URLSearchParams();
-  if (filter.status) params.set("status", filter.status);
-  if (filter.priority) params.set("priority", filter.priority);
+  filter.status?.forEach((s) => params.append("status", s));
+  filter.priority?.forEach((p) => params.append("priority", p));
   if (filter.assignee_id) params.set("assignee_id", filter.assignee_id);
   if (filter.search) params.set("q", filter.search);
   if (filter.sort_by) params.set("sort_by", filter.sort_by);
