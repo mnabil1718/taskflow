@@ -11,7 +11,7 @@ import {
     type SortingState,
     type RowSelectionState,
 } from "@tanstack/react-table";
-import { ArrowLeft, ClipboardList, FileText, Settings, Trash2, Users } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileText, LayoutGrid, Settings, Trash2, Users } from "lucide-react";
 
 import { AppNavbar } from "@/components/app-navbar";
 import {
@@ -72,39 +72,30 @@ const sortableColumns: Record<string, string> = {
     created_at: "created_at",
 };
 
-function buildColumns(members: ProjectMember[], projectId: string, isOwner: boolean) {
+function buildColumns(members: ProjectMember[], projectId: string) {
     const columnHelper = createColumnHelper<Task>();
 
-    // Selection column only exists for owners since members have no
-    // bulk-delete capability — showing checkboxes they can't act on is
-    // worse UX than hiding the column entirely.
-    const selectColumn = isOwner
-        ? [
-              columnHelper.display({
-                  id: "select",
-                  meta: { headerClassName: "w-[40px]", cellClassName: "w-[40px]" },
-                  header: ({ table }) => (
-                      <Checkbox
-                          checked={table.getIsAllPageRowsSelected()}
-                          indeterminate={table.getIsSomePageRowsSelected()}
-                          onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-                          aria-label="Select all on page"
-                      />
-                  ),
-                  cell: ({ row }) => (
-                      <Checkbox
-                          checked={row.getIsSelected()}
-                          onCheckedChange={(v) => row.toggleSelected(!!v)}
-                          aria-label={`Select ${row.original.title}`}
-                      />
-                  ),
-                  enableSorting: false,
-              }),
-          ]
-        : [];
-
     return [
-        ...selectColumn,
+        columnHelper.display({
+            id: "select",
+            meta: { headerClassName: "w-[40px]", cellClassName: "w-[40px]" },
+            header: ({ table }) => (
+                <Checkbox
+                    checked={table.getIsAllPageRowsSelected()}
+                    indeterminate={table.getIsSomePageRowsSelected()}
+                    onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
+                    aria-label="Select all on page"
+                />
+            ),
+            cell: ({ row }) => (
+                <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(v) => row.toggleSelected(!!v)}
+                    aria-label={`Select ${row.original.title}`}
+                />
+            ),
+            enableSorting: false,
+        }),
         columnHelper.accessor("title", {
             header: "Title",
             meta: { cellClassName: "max-w-xs", cellInnerClassName: "truncate" },
@@ -194,7 +185,6 @@ function buildColumns(members: ProjectMember[], projectId: string, isOwner: bool
                 <TaskRowActions
                     task={row.original}
                     projectId={projectId}
-                    isOwner={isOwner}
                     members={members}
                 />
             ),
@@ -254,7 +244,7 @@ export default function ProjectDetailPage() {
 
     const isOwner = !!user && !!project && user.id === project.owner_id;
 
-    const columns = buildColumns(members, id, isOwner);
+    const columns = buildColumns(members, id);
 
     const table = useReactTable({
         data: tasks,
@@ -313,20 +303,31 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {/* Project header */}
-                <div className="space-y-1">
-                    <h2 className="text-lg font-semibold">
-                        {project?.name ?? "—"}
-                    </h2>
-                    {project?.description && (
-                        <p className="text-sm text-muted-foreground max-w-prose">
-                            {project.description}
-                        </p>
-                    )}
-                    {project?.deadline && (
-                        <p className="text-xs text-muted-foreground">
-                            Deadline: {formatDate(project.deadline)}
-                        </p>
-                    )}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0">
+                        <h2 className="text-lg font-semibold">
+                            {project?.name ?? "—"}
+                        </h2>
+                        {project?.description && (
+                            <p className="text-sm text-muted-foreground max-w-prose">
+                                {project.description}
+                            </p>
+                        )}
+                        {project?.deadline && (
+                            <p className="text-xs text-muted-foreground">
+                                Deadline: {formatDate(project.deadline)}
+                            </p>
+                        )}
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="lg"
+                        className="px-4! shrink-0"
+                        render={<Link href={`/projects/${id}/board`} />}
+                    >
+                        <LayoutGrid className="size-4" />
+                        Open board
+                    </Button>
                 </div>
 
                 {/* Tabs */}
@@ -347,7 +348,7 @@ export default function ProjectDetailPage() {
                     {/* Tasks tab */}
                     <TabsContent value="tasks" className="pt-4 space-y-4">
                         <div className="flex items-center justify-end gap-2">
-                            {isOwner && selectedCount > 0 && (
+                            {selectedCount > 0 && (
                                 <Button
                                     variant="destructive"
                                     size="lg"
@@ -359,7 +360,7 @@ export default function ProjectDetailPage() {
                                     Delete {selectedCount} selected
                                 </Button>
                             )}
-                            {isOwner && <CreateTaskDialog projectId={id} members={members} />}
+                            <CreateTaskDialog projectId={id} members={members} />
                         </div>
 
                         <DataTable

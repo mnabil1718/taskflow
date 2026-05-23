@@ -7,8 +7,11 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { tasksApi } from "@/lib/api/tasks";
+import { compareLexorank } from "@/lib/lexorank";
 import type {
+    BoardView,
     CreateTaskRequest,
+    Task,
     TaskFilter,
     TaskStatus,
     UpdateTaskRequest,
@@ -25,7 +28,84 @@ export const taskKeys = {
     list: (projectId: string, filter: TaskFilter) =>
         ["projects", projectId, "tasks", "list", filter] as const,
     allTasks: (filter: TaskFilter) => [...GLOBAL_TASKS_KEY, filter] as const,
+    board: (projectId: string) => ["projects", projectId, "board"] as const,
 };
+
+export function useBoard(projectId: string) {
+    return useQuery({
+        queryKey: taskKeys.board(projectId),
+        queryFn: () => tasksApi.board(projectId),
+        staleTime: 30 * 1000,
+        enabled: !!projectId,
+    });
+}
+
+// applyMoveToBoardView produces the next BoardView snapshot for a task
+// move: remove from its current bucket, update status+position, insert
+// into the target bucket in lexorank order. Exported as a pure function
+// so it can be reused for optimistic updates without the hook closure.
+function applyMoveToBoardView(
+    board: BoardView,
+    move: { id: string; status: TaskStatus; position: string }
+): BoardView {
+    let moved: Task | null = null;
+    const without = (list: Task[]): Task[] => {
+        const idx = list.findIndex((t) => t.id === move.id);
+        if (idx === -1) return list;
+        moved = list[idx];
+        return [...list.slice(0, idx), ...list.slice(idx + 1)];
+    };
+    const next: BoardView = {
+        todo: without(board.todo),
+        in_progress: without(board.in_progress),
+        done: without(board.done),
+    };
+    if (!moved) return board;
+    const updated: Task = { ...(moved as Task), status: move.status, position: move.position };
+    const targetList = [...next[move.status], updated].sort(
+        (a, b) => compareLexorank(a.position, b.position)
+    );
+    return { ...next, [move.status]: targetList };
+}
+
+// useMoveTask persists a drag-and-drop. The optimistic onMutate writes
+// the new (status, position) into the board cache immediately so the
+// real card is already at its destination by the time the DragOverlay
+// disappears — no "snap back to origin, then jump to new spot" between
+// the drop and the refetch. If the server rejects (e.g. permission or
+// race), the previous snapshot is restored and the next refetch yields
+// the truth either way.
+export function useMoveTask(projectId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, status, position }: { id: string; status: TaskStatus; position: string }) =>
+            tasksApi.move(id, { status, position }),
+        onMutate: async (vars) => {
+            const boardKey = taskKeys.board(projectId);
+            await qc.cancelQueries({ queryKey: boardKey });
+            const previous = qc.getQueryData<BoardView>(boardKey);
+            if (previous) {
+                qc.setQueryData(boardKey, applyMoveToBoardView(previous, vars));
+            }
+            return { previous };
+        },
+        onError: (_err, _vars, ctx) => {
+            if (ctx?.previous) {
+                qc.setQueryData(taskKeys.board(projectId), ctx.previous);
+            }
+        },
+        onSettled: (task) => {
+            qc.invalidateQueries({ queryKey: taskKeys.board(projectId) });
+            qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
+            qc.invalidateQueries({ queryKey: ["dashboard"] });
+            if (task) {
+                qc.invalidateQueries({ queryKey: ["tasks", "detail", task.id] });
+                qc.invalidateQueries({ queryKey: ["tasks", task.id, "activity"] });
+            }
+        },
+    });
+}
 
 export function useAllTasks(filter: TaskFilter = {}) {
     return useQuery({

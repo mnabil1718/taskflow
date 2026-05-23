@@ -31,10 +31,6 @@ type ActiveDialog = "edit" | "delete" | null;
 interface TaskRowActionsProps {
     task: Task;
     projectId: string;
-    /** Whether the current user is the owner of this task's project. Owners
-     * see Edit + Delete; everyone (member or owner) sees the three quick
-     * status-change items. */
-    isOwner: boolean;
     /** Pass pre-loaded members to avoid an extra fetch; omit to auto-fetch. */
     members?: ProjectMember[];
 }
@@ -48,12 +44,15 @@ const statusItems: { value: TaskStatus; label: string; icon: React.ElementType }
     { value: "done", label: "Done", icon: CheckCircle2 },
 ];
 
-export function TaskRowActions({ task, projectId, isOwner, members: propMembers }: TaskRowActionsProps) {
+export function TaskRowActions({ task, projectId, members: propMembers }: TaskRowActionsProps) {
     const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
     const deleteTask = useDeleteTask(projectId);
     const updateStatus = useUpdateTaskStatus(projectId);
+    // The edit dialog needs the project's member list for the assignee
+    // picker. If a caller (e.g. the project page) already has the
+    // members loaded, it passes them in to skip the extra fetch.
     const { data: fetchedMembers = [] } = useProjectMembers(
-        propMembers === undefined && isOwner ? projectId : ""
+        propMembers === undefined ? projectId : ""
     );
     const members = propMembers ?? fetchedMembers;
 
@@ -91,26 +90,22 @@ export function TaskRowActions({ task, projectId, isOwner, members: propMembers 
                             </DropdownMenuItem>
                         ))}
 
-                    {isOwner && (
-                        <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setActiveDialog("edit")}>
-                                <Pencil />
-                                Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => setActiveDialog("delete")}
-                            >
-                                <Trash2 />
-                                Delete
-                            </DropdownMenuItem>
-                        </>
-                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setActiveDialog("edit")}>
+                        <Pencil />
+                        Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setActiveDialog("delete")}
+                    >
+                        <Trash2 />
+                        Delete
+                    </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            {isOwner && activeDialog === "edit" && (
+            {activeDialog === "edit" && (
                 <EditTaskDialog
                     task={task}
                     projectId={projectId}
@@ -120,38 +115,36 @@ export function TaskRowActions({ task, projectId, isOwner, members: propMembers 
                 />
             )}
 
-            {isOwner && (
-                <AlertDialog
-                    open={activeDialog === "delete"}
-                    onOpenChange={(open) => !open && setActiveDialog(null)}
-                >
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>
-                                Delete &ldquo;{task.title}&rdquo;?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This action cannot be undone.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel disabled={deleteTask.isPending}>
-                                Cancel
-                            </AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    handleDelete();
-                                }}
-                                disabled={deleteTask.isPending}
-                                className="bg-destructive text-white hover:bg-destructive/90"
-                            >
-                                {deleteTask.isPending ? "Deleting…" : "Delete"}
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
+            <AlertDialog
+                open={activeDialog === "delete"}
+                onOpenChange={(open) => !open && setActiveDialog(null)}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Delete &ldquo;{task.title}&rdquo;?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteTask.isPending}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleDelete();
+                            }}
+                            disabled={deleteTask.isPending}
+                            className="bg-destructive text-white hover:bg-destructive/90"
+                        >
+                            {deleteTask.isPending ? "Deleting…" : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     );
 }

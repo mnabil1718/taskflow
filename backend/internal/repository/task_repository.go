@@ -322,11 +322,12 @@ func (r *taskRepository) ListAll(ctx context.Context, userID string, filter mode
 	return tasks, total, rows.Err()
 }
 
-// BulkDelete soft-deletes tasks the caller owns at the project level.
-// Tasks whose parent project isn't owned by the caller are silently
-// skipped (the WHERE filter doesn't match them), so the count reflects
-// only rows the RBAC rule actually permitted. The owner-only policy
-// matches the single Delete endpoint.
+// BulkDelete soft-deletes every requested task the caller has access to
+// through project membership. Tasks belonging to projects the caller
+// isn't a member of (or that are themselves trashed) are silently
+// skipped — the returned count reports the rows actually written.
+// Matches the single Delete endpoint's RBAC: any project member may
+// delete tasks in that project.
 func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []string) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
@@ -349,7 +350,10 @@ func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []st
 			WHERE id IN (%s)
 			  AND deleted_at IS NULL
 			  AND project_id IN (
-			      SELECT id FROM projects WHERE owner_id = $1 AND deleted_at IS NULL
+			      SELECT pm.project_id
+			      FROM project_members pm
+			      JOIN projects p ON p.id = pm.project_id
+			      WHERE pm.user_id = $1 AND p.deleted_at IS NULL
 			  )
 			RETURNING id
 		)
@@ -366,13 +370,18 @@ func (r *taskRepository) BulkDelete(ctx context.Context, userID string, ids []st
 // BoardList returns every task in the project ordered by (status, position)
 // for the Kanban board. No pagination — boards are meant to render in one
 // shot, and the composite index (project_id, status, position) covers the
-// read.
+// read. LEFT JOIN users so each card carries the assignee's name + email
+// for the avatar tooltip; without it the frontend's initials fallback
+// would show a "?" instead of the actual assignee.
 func (r *taskRepository) BoardList(ctx context.Context, projectID string) ([]*model.Task, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
-		FROM tasks
-		WHERE project_id = $1 AND deleted_at IS NULL
-		ORDER BY status, position
+		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
+		       t.project_id, t.assignee_id, t.created_by, t.due_date,
+		       t.created_at, t.updated_at, u.name, u.email
+		FROM tasks t
+		LEFT JOIN users u ON u.id = t.assignee_id
+		WHERE t.project_id = $1 AND t.deleted_at IS NULL
+		ORDER BY t.status, t.position
 	`, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("board list: %w", err)
@@ -381,7 +390,7 @@ func (r *taskRepository) BoardList(ctx context.Context, projectID string) ([]*mo
 
 	tasks := make([]*model.Task, 0)
 	for rows.Next() {
-		t, err := scanTask(rows)
+		t, err := scanTaskWithAssignee(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
