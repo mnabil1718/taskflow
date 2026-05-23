@@ -77,11 +77,20 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 	t := &model.Task{}
 	var desc sql.NullString
 	var assignee, creator sql.NullString
+	var assigneeName, assigneeEmail sql.NullString
 	var dueDate sql.NullTime
 
+	// LEFT JOIN users so the detail page can render the assignee's name
+	// and email without a second round-trip. The List/ListAll queries
+	// already do this; the single-row read was the missing piece that
+	// made the task detail page show "Unknown".
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, title, description, status, priority, position, project_id, assignee_id, created_by, due_date, created_at, updated_at
-		FROM tasks WHERE id = $1 AND deleted_at IS NULL
+		SELECT t.id, t.title, t.description, t.status, t.priority, t.position,
+		       t.project_id, t.assignee_id, t.created_by, t.due_date,
+		       t.created_at, t.updated_at, u.name, u.email
+		FROM tasks t
+		LEFT JOIN users u ON u.id = t.assignee_id
+		WHERE t.id = $1 AND t.deleted_at IS NULL
 	`, id).Scan(
 		&t.ID,
 		&t.Title,
@@ -95,6 +104,8 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 		&dueDate,
 		&t.CreatedAt,
 		&t.UpdatedAt,
+		&assigneeName,
+		&assigneeEmail,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -114,6 +125,12 @@ func (r *taskRepository) GetByID(ctx context.Context, id string) (*model.Task, e
 	}
 	if dueDate.Valid {
 		t.DueDate = &dueDate.Time
+	}
+	if assigneeName.Valid {
+		t.AssigneeName = &assigneeName.String
+	}
+	if assigneeEmail.Valid {
+		t.AssigneeEmail = &assigneeEmail.String
 	}
 
 	return t, nil
