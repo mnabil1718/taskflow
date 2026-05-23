@@ -132,13 +132,15 @@ export default function BoardPage() {
 
         const activeId = String(active.id);
         const overId = String(over.id);
+        if (activeId === overId) return;
 
         const from = locate(filtered, activeId);
         if (!from) return;
 
-        // Dropping straight onto a column droppable id ("todo" / etc.)
-        // sends the card to the END of that column. Dropping on another
-        // card means "insert before that card in its column".
+        // Dropping straight onto a column droppable id sends the card
+        // to the END of that column. Otherwise the over-target is
+        // another card, and we still need to decide whether to insert
+        // before or after it (see rect comparison below).
         const isColumnDrop = COLUMNS.some((c) => c.status === overId);
         const targetStatus = isColumnDrop
             ? (overId as TaskStatus)
@@ -153,39 +155,51 @@ export default function BoardPage() {
         // a value that would be visually discarded.
         if (!crossColumn && !isSortableColumn(targetStatus)) return;
 
-        const targetList = filtered[targetStatus];
+        // Work with the target list minus the dragged card so neighbour
+        // lookups don't pick up the card we're moving. For cross-column
+        // drops the filter is a no-op (active isn't in the target list).
+        const targetList = filtered[targetStatus].filter((t) => t.id !== activeId);
+
         let prev: Task | null;
         let next: Task | null;
 
         if (isColumnDrop) {
             prev = targetList[targetList.length - 1] ?? null;
-            // If the user is dropping into the column they already came
-            // from, `prev` ends up as the dragged card itself — strip it.
-            if (prev?.id === activeId) {
-                prev = targetList[targetList.length - 2] ?? null;
-            }
             next = null;
         } else {
             const overIdx = targetList.findIndex((t) => t.id === overId);
             if (overIdx === -1) return;
-            // Insert *above* the over-card.
-            next = targetList[overIdx] ?? null;
-            prev = targetList[overIdx - 1] ?? null;
-            // If `prev` would be the dragged card itself (dragging down
-            // by one slot in the same column), skip it so the new
-            // position sits between the two neighbours of its old slot.
-            if (prev?.id === activeId) {
-                prev = targetList[overIdx - 2] ?? null;
+
+            // Decide insert-before vs insert-after by comparing the
+            // dragged card's vertical midpoint to the over-card's
+            // midpoint. closestCorners reports the nearest card as
+            // `over` whenever the cursor is anywhere near it, so
+            // without this check dropping below the last card would
+            // always sandwich the new card *above* it — which was the
+            // "can't append to the bottom" bug.
+            const draggedRect = active.rect.current.translated ?? active.rect.current.initial;
+            const overMid = over.rect.top + over.rect.height / 2;
+            const draggedMid = draggedRect
+                ? draggedRect.top + draggedRect.height / 2
+                : overMid;
+            const isBelowOver = draggedMid > overMid;
+
+            if (isBelowOver) {
+                prev = targetList[overIdx];
+                next = targetList[overIdx + 1] ?? null;
+            } else {
+                prev = targetList[overIdx - 1] ?? null;
+                next = targetList[overIdx];
             }
         }
-        if (prev?.id === activeId) prev = null;
-        if (next?.id === activeId) next = null;
 
-        // No-op guard: same column, same neighbours.
+        // No-op guard: same column, same neighbours. Compare against
+        // the filtered list with the dragged card removed — that's the
+        // logical "slot" the card occupied before the drag.
         if (!crossColumn) {
-            const fromList = filtered[from.status];
+            const fromList = filtered[from.status].filter((t) => t.id !== activeId);
             const currentPrev = fromList[from.index - 1] ?? null;
-            const currentNext = fromList[from.index + 1] ?? null;
+            const currentNext = fromList[from.index] ?? null;
             if (currentPrev?.id === prev?.id && currentNext?.id === next?.id) {
                 return;
             }
