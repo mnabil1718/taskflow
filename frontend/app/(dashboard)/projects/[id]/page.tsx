@@ -11,7 +11,7 @@ import {
     type SortingState,
     type RowSelectionState,
 } from "@tanstack/react-table";
-import { ArrowLeft, ClipboardList, FileText, Settings, Trash2, Users } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileText, LayoutGrid, Settings, Trash2, Users } from "lucide-react";
 
 import { AppNavbar } from "@/components/app-navbar";
 import {
@@ -313,20 +313,31 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {/* Project header */}
-                <div className="space-y-1">
-                    <h2 className="text-lg font-semibold">
-                        {project?.name ?? "—"}
-                    </h2>
-                    {project?.description && (
-                        <p className="text-sm text-muted-foreground max-w-prose">
-                            {project.description}
-                        </p>
-                    )}
-                    {project?.deadline && (
-                        <p className="text-xs text-muted-foreground">
-                            Deadline: {formatDate(project.deadline)}
-                        </p>
-                    )}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0">
+                        <h2 className="text-lg font-semibold">
+                            {project?.name ?? "—"}
+                        </h2>
+                        {project?.description && (
+                            <p className="text-sm text-muted-foreground max-w-prose">
+                                {project.description}
+                            </p>
+                        )}
+                        {project?.deadline && (
+                            <p className="text-xs text-muted-foreground">
+                                Deadline: {formatDate(project.deadline)}
+                            </p>
+                        )}
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="lg"
+                        className="px-4! shrink-0"
+                        render={<Link href={`/projects/${id}/board`} />}
+                    >
+                        <LayoutGrid className="size-4" />
+                        Open board
+                    </Button>
                 </div>
 
                 {/* Tabs */}

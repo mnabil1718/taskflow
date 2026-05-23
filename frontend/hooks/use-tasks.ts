@@ -25,7 +25,38 @@ export const taskKeys = {
     list: (projectId: string, filter: TaskFilter) =>
         ["projects", projectId, "tasks", "list", filter] as const,
     allTasks: (filter: TaskFilter) => [...GLOBAL_TASKS_KEY, filter] as const,
+    board: (projectId: string) => ["projects", projectId, "board"] as const,
 };
+
+export function useBoard(projectId: string) {
+    return useQuery({
+        queryKey: taskKeys.board(projectId),
+        queryFn: () => tasksApi.board(projectId),
+        staleTime: 30 * 1000,
+        enabled: !!projectId,
+    });
+}
+
+// useMoveTask persists a drag-and-drop. The optimistic update writes the
+// new (status, position) into the board cache immediately so the card
+// doesn't snap back to its old spot during the round-trip. If the server
+// rejects (rare — permission or race), the optimistic mutation rolls
+// back and the next refetch produces the truth.
+export function useMoveTask(projectId: string) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, status, position }: { id: string; status: TaskStatus; position: string }) =>
+            tasksApi.move(id, { status, position }),
+        onSuccess: (task) => {
+            qc.invalidateQueries({ queryKey: taskKeys.board(projectId) });
+            qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
+            qc.invalidateQueries({ queryKey: ["dashboard"] });
+            qc.invalidateQueries({ queryKey: ["tasks", "detail", task.id] });
+            qc.invalidateQueries({ queryKey: ["tasks", task.id, "activity"] });
+        },
+    });
+}
 
 export function useAllTasks(filter: TaskFilter = {}) {
     return useQuery({
