@@ -23,6 +23,7 @@ import {
 import { DataTable } from "@/components/data-table";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaginationControls } from "@/components/pagination-controls";
+import { CreateTaskGlobalDialog } from "@/components/tasks/create-task-global-dialog";
 import { useProjects } from "@/hooks/use-projects";
 import { useAllTasks } from "@/hooks/use-tasks";
 import { useDebounced } from "@/hooks/use-debounced";
@@ -229,6 +230,7 @@ export default function TasksPage() {
             <main className="flex-1 overflow-y-auto p-6 space-y-4">
                 <div className="flex items-center justify-between gap-4">
                     <h2 className="text-lg font-semibold">All Tasks</h2>
+                    <CreateTaskGlobalDialog />
                 </div>
 
                 <DataTable
