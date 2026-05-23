@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
     useReactTable,
@@ -11,7 +11,7 @@ import {
     type SortingState,
     type RowSelectionState,
 } from "@tanstack/react-table";
-import { ArrowLeft, ClipboardList, Trash2 } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileText, Settings, Trash2, Users } from "lucide-react";
 
 import { AppNavbar } from "@/components/app-navbar";
 import {
@@ -34,15 +34,21 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/data-table";
 import { DataTableToolbar } from "@/components/data-table-toolbar";
 import { PaginationControls } from "@/components/pagination-controls";
+import { ProjectMembersPanel } from "@/components/projects/project-members-panel";
+import { ProjectMetadataForm } from "@/components/projects/project-metadata-form";
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
 import { TaskRowActions } from "@/components/tasks/task-row-actions";
-import { useProject, useProjectMembers } from "@/hooks/use-projects";
+import { useDeleteProject, useProject, useProjectMembers } from "@/hooks/use-projects";
 import { useTasks, useBulkDeleteTasks } from "@/hooks/use-tasks";
 import { useDebounced } from "@/hooks/use-debounced";
+import { useAuth } from "@/lib/auth-context";
 import { formatDate } from "@/lib/date-utils";
+import { cn } from "@/lib/utils";
 import type {
     ProjectMember,
     Task,
@@ -179,8 +185,17 @@ function buildColumns(members: ProjectMember[], projectId: string) {
     ];
 }
 
+type SettingsSection = "details" | "members";
+
+const settingsNav: { id: SettingsSection; label: string; icon: React.ElementType }[] = [
+    { id: "details", label: "Project details", icon: FileText },
+    { id: "members", label: "Members", icon: Users },
+];
+
 export default function ProjectDetailPage() {
     const { id } = useParams<{ id: string }>();
+    const { user } = useAuth();
+    const router = useRouter();
 
     const [page, setPage] = useState(1);
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -189,6 +204,8 @@ export default function ProjectDetailPage() {
     const [statusFilter, setStatusFilter] = useState<TaskStatus | "">("");
     const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "">("");
     const [confirmOpen, setConfirmOpen] = useState(false);
+    const [settingsSection, setSettingsSection] = useState<SettingsSection>("details");
+    const [deleteProjectOpen, setDeleteProjectOpen] = useState(false);
 
     const search = useDebounced(searchInput, 300);
 
@@ -207,10 +224,18 @@ export default function ProjectDetailPage() {
     const { data: members = [] } = useProjectMembers(id);
     const { data, isLoading: tasksLoading, isFetching } = useTasks(id, filter);
     const bulkDelete = useBulkDeleteTasks();
+    const deleteProject = useDeleteProject();
+
+    const handleDeleteProject = async () => {
+        await deleteProject.mutateAsync(id);
+        router.push("/projects");
+    };
 
     const tasks = data?.items ?? [];
     const total = data?.total ?? 0;
     const totalPages = data?.total_pages ?? 0;
+
+    const isOwner = !!user && !!project && user.id === project.owner_id;
 
     const columns = buildColumns(members, id);
 
@@ -270,91 +295,186 @@ export default function ProjectDetailPage() {
                     </Button>
                 </div>
 
-                <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                        <h2 className="text-lg font-semibold">
-                            {project?.name ?? "—"}
-                        </h2>
-                        {project?.description && (
-                            <p className="text-sm text-muted-foreground max-w-prose">
-                                {project.description}
-                            </p>
-                        )}
-                        {project?.deadline && (
-                            <p className="text-xs text-muted-foreground">
-                                Deadline: {formatDate(project.deadline)}
-                            </p>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {selectedCount > 0 && (
-                            <Button
-                                variant="destructive"
-                                size="lg"
-                                onClick={() => setConfirmOpen(true)}
-                                disabled={bulkDelete.isPending}
-                                className="px-4!"
-                            >
-                                <Trash2 className="size-4" />
-                                Delete {selectedCount} selected
-                            </Button>
-                        )}
-                        <CreateTaskDialog projectId={id} members={members} />
-                    </div>
+                {/* Project header */}
+                <div className="space-y-1">
+                    <h2 className="text-lg font-semibold">
+                        {project?.name ?? "—"}
+                    </h2>
+                    {project?.description && (
+                        <p className="text-sm text-muted-foreground max-w-prose">
+                            {project.description}
+                        </p>
+                    )}
+                    {project?.deadline && (
+                        <p className="text-xs text-muted-foreground">
+                            Deadline: {formatDate(project.deadline)}
+                        </p>
+                    )}
                 </div>
 
-                <DataTable
-                    table={table}
-                    isLoading={tasksLoading}
-                    toolbar={
-                        <DataTableToolbar
-                            searchValue={searchInput}
-                            onSearchChange={handleSearchChange}
-                            searchPlaceholder="Search tasks…"
-                        >
-                            <Select value={statusFilter || "all"} onValueChange={handleStatusChange}>
-                                <SelectTrigger className="w-36">
-                                    <SelectValue placeholder="All statuses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All statuses</SelectItem>
-                                    <SelectItem value="todo">To Do</SelectItem>
-                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                    <SelectItem value="done">Done</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={priorityFilter || "all"} onValueChange={handlePriorityChange}>
-                                <SelectTrigger className="w-36">
-                                    <SelectValue placeholder="All priorities" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All priorities</SelectItem>
-                                    <SelectItem value="low">Low</SelectItem>
-                                    <SelectItem value="medium">Medium</SelectItem>
-                                    <SelectItem value="high">High</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </DataTableToolbar>
-                    }
-                    empty={
-                        <>
-                            <ClipboardList className="mb-3 size-10 text-muted-foreground" />
-                            <p className="text-sm font-medium">No tasks yet</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Create the first task for this project.
-                            </p>
-                        </>
-                    }
-                />
+                {/* Tabs */}
+                <Tabs defaultValue="tasks">
+                    <TabsList>
+                        <TabsTrigger value="tasks">
+                            <ClipboardList className="size-4" />
+                            Tasks
+                        </TabsTrigger>
+                        {isOwner && (
+                            <TabsTrigger value="settings">
+                                <Settings className="size-4" />
+                                Settings
+                            </TabsTrigger>
+                        )}
+                    </TabsList>
 
-                <PaginationControls
-                    page={page}
-                    pageSize={PAGE_SIZE}
-                    total={total}
-                    totalPages={totalPages}
-                    onPageChange={setPage}
-                    disabled={isFetching}
-                />
+                    {/* Tasks tab */}
+                    <TabsContent value="tasks" className="pt-4 space-y-4">
+                        <div className="flex items-center justify-end gap-2">
+                            {selectedCount > 0 && (
+                                <Button
+                                    variant="destructive"
+                                    size="lg"
+                                    onClick={() => setConfirmOpen(true)}
+                                    disabled={bulkDelete.isPending}
+                                    className="px-4!"
+                                >
+                                    <Trash2 className="size-4" />
+                                    Delete {selectedCount} selected
+                                </Button>
+                            )}
+                            <CreateTaskDialog projectId={id} members={members} />
+                        </div>
+
+                        <DataTable
+                            table={table}
+                            isLoading={tasksLoading}
+                            toolbar={
+                                <DataTableToolbar
+                                    searchValue={searchInput}
+                                    onSearchChange={handleSearchChange}
+                                    searchPlaceholder="Search tasks…"
+                                >
+                                    <Select value={statusFilter || "all"} onValueChange={handleStatusChange}>
+                                        <SelectTrigger className="w-36">
+                                            <SelectValue placeholder="All statuses" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All statuses</SelectItem>
+                                            <SelectItem value="todo">To Do</SelectItem>
+                                            <SelectItem value="in_progress">In Progress</SelectItem>
+                                            <SelectItem value="done">Done</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={priorityFilter || "all"} onValueChange={handlePriorityChange}>
+                                        <SelectTrigger className="w-36">
+                                            <SelectValue placeholder="All priorities" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All priorities</SelectItem>
+                                            <SelectItem value="low">Low</SelectItem>
+                                            <SelectItem value="medium">Medium</SelectItem>
+                                            <SelectItem value="high">High</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </DataTableToolbar>
+                            }
+                            empty={
+                                <>
+                                    <ClipboardList className="mb-3 size-10 text-muted-foreground" />
+                                    <p className="text-sm font-medium">No tasks yet</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Create the first task for this project.
+                                    </p>
+                                </>
+                            }
+                        />
+
+                        <PaginationControls
+                            page={page}
+                            pageSize={PAGE_SIZE}
+                            total={total}
+                            totalPages={totalPages}
+                            onPageChange={setPage}
+                            disabled={isFetching}
+                        />
+                    </TabsContent>
+
+                    {/* Settings tab (owner only) */}
+                    {isOwner && (
+                        <TabsContent value="settings" className="pt-6">
+                            <div className="flex flex-col gap-6 md:flex-row md:gap-8">
+                                {/* Nav — horizontal scrollable on mobile, vertical sidebar on md+ */}
+                                <nav className="shrink-0 md:w-52">
+                                    <ul className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0 md:space-y-0.5">
+                                        {settingsNav.map(({ id: sid, label, icon: Icon }) => (
+                                            <li key={sid} className="shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettingsSection(sid)}
+                                                    className={cn(
+                                                        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left whitespace-nowrap",
+                                                        settingsSection === sid
+                                                            ? "bg-accent font-medium text-accent-foreground"
+                                                            : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                                                    )}
+                                                >
+                                                    <Icon className="size-4 shrink-0" />
+                                                    {label}
+                                                </button>
+                                            </li>
+                                        ))}
+                                        <li className="shrink-0 md:mt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setDeleteProjectOpen(true)}
+                                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive transition-colors text-left whitespace-nowrap hover:bg-destructive/10"
+                                            >
+                                                <Trash2 className="size-4 shrink-0" />
+                                                Delete project
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+
+                                <Separator className="md:hidden" />
+                                <Separator orientation="vertical" className="hidden md:block h-auto self-stretch" />
+
+                                {/* Content area */}
+                                <div className="flex-1 min-w-0 space-y-4">
+                                    {settingsSection === "details" && (
+                                        <>
+                                            <div>
+                                                <h3 className="text-base font-semibold">Project details</h3>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Update the project name, description, status, and deadline.
+                                                </p>
+                                            </div>
+                                            <Separator />
+                                            {project && <ProjectMetadataForm project={project} />}
+                                        </>
+                                    )}
+
+                                    {settingsSection === "members" && (
+                                        <>
+                                            <div>
+                                                <h3 className="text-base font-semibold">Members</h3>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Add or remove project members.
+                                                </p>
+                                            </div>
+                                            <Separator />
+                                            <ProjectMembersPanel
+                                                projectId={id}
+                                                currentUserId={user?.id ?? ""}
+                                            />
+                                        </>
+                                    )}
+
+                                </div>
+                            </div>
+                        </TabsContent>
+                    )}
+                </Tabs>
             </main>
 
             <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
@@ -379,6 +499,31 @@ export default function ProjectDetailPage() {
                             className="bg-destructive text-white hover:bg-destructive/90"
                         >
                             {bulkDelete.isPending ? "Deleting…" : "Delete"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={deleteProjectOpen} onOpenChange={setDeleteProjectOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete &ldquo;{project?.name}&rdquo;?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the project and all its tasks.
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteProject.isPending}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleDeleteProject();
+                            }}
+                            disabled={deleteProject.isPending}
+                            className="bg-destructive text-white hover:bg-destructive/90"
+                        >
+                            {deleteProject.isPending ? "Deleting…" : "Delete project"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
