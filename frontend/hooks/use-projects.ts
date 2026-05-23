@@ -75,7 +75,9 @@ export function useDeleteProject() {
         mutationFn: (id: string) => projectsApi.delete(id),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: projectKeys.all });
+            qc.invalidateQueries({ queryKey: ["tasks", "all"] });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
+            qc.invalidateQueries({ queryKey: ["trash"] });
             toast.success("Project deleted");
         },
     });
@@ -109,7 +111,9 @@ export function useBulkDeleteProjects() {
         mutationFn: (ids: string[]) => projectsApi.bulkDelete(ids),
         onSuccess: ({ deleted_count }) => {
             qc.invalidateQueries({ queryKey: projectKeys.all });
+            qc.invalidateQueries({ queryKey: ["tasks", "all"] });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
+            qc.invalidateQueries({ queryKey: ["trash"] });
             toast.success(
                 `Deleted ${deleted_count} project${deleted_count === 1 ? "" : "s"}`
             );

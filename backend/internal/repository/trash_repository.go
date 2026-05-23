@@ -48,15 +48,21 @@ func NewTrashRepository(db *sql.DB) TrashRepository {
 func (r *trashRepository) List(ctx context.Context, userID string) ([]*model.TrashItem, error) {
 	// UNION ALL keeps the two scans independent (no de-dup work), and the
 	// outer ORDER BY interleaves them by deleted_at so the most recently
-	// deleted things surface first regardless of kind.
+	// deleted things surface first regardless of kind. The project branch
+	// also reports how many tasks were swept in by the cascade soft-delete
+	// so the row can advertise "Auth rework — 5 tasks" instead of leaving
+	// the user wondering where the tasks went.
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT kind, id, title, project_id, project_name, deleted_at
+		SELECT kind, id, title, project_id, project_name, task_count, deleted_at
 		FROM (
 			SELECT 'project'::text AS kind,
 			       p.id::text       AS id,
 			       p.name           AS title,
 			       NULL::text       AS project_id,
 			       NULL::text       AS project_name,
+			       (SELECT COUNT(*) FROM tasks
+			        WHERE project_id = p.id
+			          AND deleted_at = p.deleted_at)::int AS task_count,
 			       p.deleted_at     AS deleted_at
 			FROM projects p
 			WHERE p.owner_id = $1 AND p.deleted_at IS NOT NULL
@@ -68,6 +74,7 @@ func (r *trashRepository) List(ctx context.Context, userID string) ([]*model.Tra
 			       t.title          AS title,
 			       t.project_id::text AS project_id,
 			       p.name           AS project_name,
+			       NULL::int        AS task_count,
 			       t.deleted_at     AS deleted_at
 			FROM tasks t
 			JOIN projects p ON p.id = t.project_id
@@ -86,7 +93,8 @@ func (r *trashRepository) List(ctx context.Context, userID string) ([]*model.Tra
 	for rows.Next() {
 		item := &model.TrashItem{}
 		var projectID, projectName sql.NullString
-		if err := rows.Scan(&item.Kind, &item.ID, &item.Title, &projectID, &projectName, &item.DeletedAt); err != nil {
+		var taskCount sql.NullInt64
+		if err := rows.Scan(&item.Kind, &item.ID, &item.Title, &projectID, &projectName, &taskCount, &item.DeletedAt); err != nil {
 			return nil, fmt.Errorf("scan trash item: %w", err)
 		}
 		if projectID.Valid {
@@ -94,6 +102,10 @@ func (r *trashRepository) List(ctx context.Context, userID string) ([]*model.Tra
 		}
 		if projectName.Valid {
 			item.ProjectName = &projectName.String
+		}
+		if taskCount.Valid {
+			n := int(taskCount.Int64)
+			item.TaskCount = &n
 		}
 		out = append(out, item)
 	}

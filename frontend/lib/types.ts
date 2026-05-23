@@ -191,6 +191,7 @@ export interface TrashItem {
   title: string;
   project_id?: string;
   project_name?: string;
+  task_count?: number;
   deleted_at: string;
 }
 

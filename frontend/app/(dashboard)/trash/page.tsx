@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     useReactTable,
     getCoreRowModel,
@@ -105,13 +105,17 @@ function buildColumns(
             meta: { cellClassName: "max-w-md" },
             cell: (info) => {
                 const item = info.row.original;
+                let subtitle: string | null = null;
+                if (item.kind === "task" && item.project_name) {
+                    subtitle = `in ${item.project_name}`;
+                } else if (item.kind === "project" && (item.task_count ?? 0) > 0) {
+                    subtitle = `${item.task_count} task${item.task_count === 1 ? "" : "s"} bundled`;
+                }
                 return (
                     <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{item.title}</p>
-                        {item.kind === "task" && item.project_name && (
-                            <p className="text-xs text-muted-foreground truncate">
-                                in {item.project_name}
-                            </p>
+                        {subtitle && (
+                            <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
                         )}
                     </div>
                 );
@@ -185,6 +189,23 @@ export default function TrashPage() {
     const empty = useEmptyTrash();
 
     const isMutating = restore.isPending || purge.isPending || empty.isPending;
+
+    // When items change (after restore/purge/refetch), drop any selection
+    // keys that no longer match a row so the bulk-action bar doesn't keep
+    // claiming "1 item selected" after the item is gone. We preserve
+    // selections that still match real rows.
+    useEffect(() => {
+        setRowSelection((prev) => {
+            const validKeys = new Set(items.map(rowKey));
+            const next: RowSelectionState = {};
+            let changed = false;
+            for (const key of Object.keys(prev)) {
+                if (validKeys.has(key)) next[key] = prev[key];
+                else changed = true;
+            }
+            return changed ? next : prev;
+        });
+    }, [items]);
 
     const handleRestoreOne = async (item: TrashItem) => {
         const payload =

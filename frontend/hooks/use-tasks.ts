@@ -77,6 +77,7 @@ export function useDeleteTask(projectId: string) {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
             qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
+            qc.invalidateQueries({ queryKey: ["trash"] });
             toast.success("Task deleted");
         },
     });
@@ -90,6 +91,7 @@ export function useBulkDeleteTasks() {
             qc.invalidateQueries({ queryKey: ["projects"] });
             qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
+            qc.invalidateQueries({ queryKey: ["trash"] });
             toast.success(`Deleted ${deleted_count} task${deleted_count === 1 ? "" : "s"}`);
         },
     });

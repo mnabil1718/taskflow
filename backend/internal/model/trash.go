@@ -14,13 +14,16 @@ const (
 
 // TrashItem is a single row in the unified trash list. The shape unifies
 // soft-deleted projects and soft-deleted tasks so the frontend can render
-// them in one table; ProjectID/ProjectName are populated only for tasks.
+// them in one table; ProjectID/ProjectName are populated only for tasks,
+// and TaskCount only for projects (so the row can advertise how many
+// tasks were bundled in via the cascade soft-delete).
 type TrashItem struct {
 	Kind        TrashKind `json:"kind"                    example:"task"`
 	ID          string    `json:"id"                      example:"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
 	Title       string    `json:"title"                   example:"Wire up auth middleware"`
 	ProjectID   *string   `json:"project_id,omitempty"    example:"c303012a-6275-4aa3-adec-ebfb123f4567"`
 	ProjectName *string   `json:"project_name,omitempty"  example:"Auth rework"`
+	TaskCount   *int      `json:"task_count,omitempty"    example:"5"`
 	DeletedAt   time.Time `json:"deleted_at"              example:"2026-05-23T09:15:00Z"`
 }
 
