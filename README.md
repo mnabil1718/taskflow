@@ -1,4 +1,5 @@
 <img width="1848" height="920" alt="Screenshot from 2026-05-24 13-16-49" src="https://github.com/user-attachments/assets/6408ca85-25ac-4483-9c2d-6cbf192111b3" />
+<img width="1848" height="920" alt="Screenshot from 2026-05-24 13-16-40" src="https://github.com/user-attachments/assets/d53c15c3-76f4-4549-bc4e-c9fed5b5775f" />
 
 # TaskFlow
 
