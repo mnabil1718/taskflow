@@ -160,6 +160,7 @@ This keeps the business logic unit-testable in isolation (services are tested
 against mock repositories) and makes the data-access boundary explicit.
 
 The `cmd` folder is an entry point for application binary. An application can have different binaries: web, cli, etc. A subfolder inside `cmd` correspond to its binary type.
+
 The `internal` directory is a special directory where go compiler won't expose its content to external packages: meaning our application business logic is isolated to use within this project and external project cannot import from `internal`. This is good practice to house application specific business logic.
 
 ## Architecture overview
@@ -195,43 +196,60 @@ The `internal` directory is a special directory where go compiler won't expose i
 
 ## Design decisions
 
-**Why Fiber (over net/http, Gin, or Echo).** Fiber is built on `fasthttp`, giving
+**Why Fiber (over net/http, Gin, or Echo)?**
+
+Fiber is built on `fasthttp`, giving
 low per-request overhead, and its Express-like API keeps routing, grouping, and
 middleware concise. Its built-in middleware (CORS, rate limiting, request
 logging) covered the cross-cutting needs here without extra dependencies.
 
-**Why pgx with database/sql, not an ORM.** The data model is small and the
-queries are well understood, so explicit SQL is clearer and faster than an ORM's
+**Why pgx with database/sql, not an ORM?**
+
+The data model is small and the queries are well understood, so explicit SQL is clearer and faster than an ORM's
 generated queries, and it avoids hidden N+1 behavior. `pgx` is the most actively
 maintained, highest-performance PostgreSQL driver for Go. All queries are
 parameterized, which also prevents SQL injection.
 
-**Why golang-migrate.** Versioned, reversible migrations make the schema
+**Why golang-migrate?**
+
+Versioned, reversible migrations make the schema
 reproducible and reviewable. Running them on startup is what lets
 `docker compose up` work with zero manual steps.
 
-**Why Google Wire for DI.** Wiring is resolved at compile time, so the dependency
+**Why Google Wire for DI?**
+
+Wiring is resolved at compile time, so the dependency
 graph is explicit and there is no runtime reflection or service-locator magic.
 Missing dependencies are build errors, not runtime panics.
 
-**Why Viper for configuration.** It reads from environment variables (and an
+**Why Viper for configuration?**
+
+It reads from environment variables (and an
 optional `.env` for local dev) with sensible defaults, keeping all configuration
 external to the binary — no secrets compiled in.
 
-**Why JWT access + refresh tokens.** Short-lived access tokens keep the common
+**Why JWT access + refresh tokens?**
+
+Short-lived access tokens keep the common
 path stateless and fast; persisting refresh tokens allows real logout and
 revocation, which a pure stateless scheme cannot offer.
 
-**Why Lexorank for ordering.** Reordering a drag-and-drop list by integer
+**Why Lexorank for ordering?**
+
+Reordering a drag-and-drop list by integer
 position forces rewriting many rows. Lexorank assigns a rank string between two
 neighbors, so a move updates a single row and rarely needs reindexing.
 
-**Why Server-Sent Events for notifications.** Notifications are one-directional
+**Why Server-Sent Events for notifications?**
+
+Notifications are one-directional
 (server to client). SSE runs over plain HTTP, reconnects automatically, and is
 far simpler to operate than WebSockets for this use case. The persisted list
 remains the source of truth; the stream just merges in live items.
 
-**Why soft deletes.** Projects and tasks are soft-deleted (`deleted_at`) and
+**Why soft deletes?**
+
+Projects and tasks are soft-deleted (`deleted_at`) and
 surfaced in a trash view, so deletions are recoverable rather than destructive.
 
 ## Security
