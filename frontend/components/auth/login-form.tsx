@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { useAppForm } from "@/lib/app-form";
@@ -15,16 +15,37 @@ import {
 } from "@/components/ui/card";
 import { Brand } from "../brand";
 
+// safeRedirectTarget gates the `from` query param to internal paths only —
+// an `?from=https://evil.example` would otherwise let the login form be
+// used as an open-redirect oracle. We accept the param only if it's a
+// site-relative path (starts with "/") that doesn't begin with the auth
+// routes that would just bounce the user back here.
+function safeRedirectTarget(from: string | null): string {
+    if (!from) return "/dashboard";
+    if (!from.startsWith("/") || from.startsWith("//")) return "/dashboard";
+    if (from.startsWith("/login") || from.startsWith("/register")) return "/dashboard";
+    return from;
+}
+
 export function LoginForm() {
     const { login } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const form = useAppForm({
         defaultValues: { email: "", password: "" },
         onSubmit: async ({ value }) => {
             try {
                 await login(value);
-                router.push("/dashboard");
+                router.push(safeRedirectTarget(searchParams.get("from")));
+                // Hold the form's isSubmitting state through the navigation
+                // so the SubmitButton stays disabled + spinner-visible until
+                // the destination page mounts and unmounts the form. The
+                // never-resolving promise also gives the top-bar progress
+                // and the inline spinner visible continuity from click to
+                // landing page — without it the button would flicker back
+                // to "Sign in" between the API success and the navigation.
+                await new Promise(() => {});
             } catch {
                 // error is toasted by the api interceptor
             }
