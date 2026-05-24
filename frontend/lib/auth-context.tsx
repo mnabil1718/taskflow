@@ -8,6 +8,7 @@ import {
     useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import { decodeJwt } from "jose";
 import { authApi } from "./api/auth";
 import { tokenStorage } from "./token";
 import type { LoginRequest, RegisterRequest } from "./types";
@@ -27,22 +28,16 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
+function userFromToken(token: string): AuthUser | null {
     try {
-        const payload = token.split(".")[1];
-        return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+        const payload = decodeJwt(token);
+        const id = payload["user_id"];
+        const email = payload["email"];
+        if (typeof id !== "string" || typeof email !== "string") return null;
+        return { id, email };
     } catch {
         return null;
     }
-}
-
-function userFromToken(token: string): AuthUser | null {
-    const payload = decodeJwtPayload(token);
-    if (!payload) return null;
-    const id = payload["user_id"];
-    const email = payload["email"];
-    if (typeof id !== "string" || typeof email !== "string") return null;
-    return { id, email };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
