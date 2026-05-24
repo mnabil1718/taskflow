@@ -8,7 +8,7 @@ import { BoardFilters } from "@/components/kanban/board-filters";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { cn } from "@/lib/utils";
 import type { BoardFilter } from "@/lib/board-filters";
-import type { Task, TaskStatus } from "@/lib/types";
+import type { ProjectMember, Task, TaskStatus } from "@/lib/types";
 
 interface KanbanColumnProps {
     status: TaskStatus;
@@ -21,6 +21,9 @@ interface KanbanColumnProps {
      * drops keep working, but in-column reorders are blocked at drop
      * time when this is false. */
     sortable: boolean;
+    /** Threaded down to each card's edit/delete actions menu. */
+    projectId: string;
+    members: ProjectMember[];
 }
 
 export function KanbanColumn({
@@ -30,6 +33,8 @@ export function KanbanColumn({
     filter,
     onFilterChange,
     sortable,
+    projectId,
+    members,
 }: KanbanColumnProps) {
     const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -68,7 +73,13 @@ export function KanbanColumn({
                         </p>
                     ) : (
                         tasks.map((task) => (
-                            <KanbanCard key={task.id} task={task} sortable={sortable} />
+                            <KanbanCard
+                                key={task.id}
+                                task={task}
+                                sortable={sortable}
+                                projectId={projectId}
+                                members={members}
+                            />
                         ))
                     )}
                 </SortableContext>

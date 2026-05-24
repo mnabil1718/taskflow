@@ -21,7 +21,8 @@ import { Card } from "@/components/ui/card";
 import { BoardFilters } from "@/components/kanban/board-filters";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { KanbanColumn } from "@/components/kanban/kanban-column";
-import { useProject } from "@/hooks/use-projects";
+import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
+import { useProject, useProjectMembers } from "@/hooks/use-projects";
 import { useBoard, useMoveTask } from "@/hooks/use-tasks";
 import {
     DEFAULT_BOARD_FILTER,
@@ -65,6 +66,7 @@ export default function BoardPage() {
 
     const { data: project } = useProject(id);
     const { data: board, isLoading } = useBoard(id);
+    const { data: members = [] } = useProjectMembers(id);
     const moveTask = useMoveTask(id);
 
     const [boardFilter, setBoardFilter] = useState<BoardFilter>(DEFAULT_BOARD_FILTER);
@@ -235,8 +237,11 @@ export default function BoardPage() {
                     {project?.name ?? "Project"}
                 </Button>
 
-                <Card className="px-4 py-3">
-                    <BoardFilters scope="board" value={boardFilter} onChange={setBoardFilter} />
+                <Card className="flex flex-row items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                        <BoardFilters scope="board" value={boardFilter} onChange={setBoardFilter} />
+                    </div>
+                    <CreateTaskDialog projectId={id} members={members} />
                 </Card>
 
                 <DndContext
@@ -258,6 +263,8 @@ export default function BoardPage() {
                                     setColumnFilters((prev) => ({ ...prev, [status]: next }))
                                 }
                                 sortable={isSortableColumn(status)}
+                                projectId={id}
+                                members={members}
                             />
                         ))}
                     </div>
