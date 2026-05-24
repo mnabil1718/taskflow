@@ -1,3 +1,5 @@
+<img width="1848" height="920" alt="Screenshot from 2026-05-24 13-16-49" src="https://github.com/user-attachments/assets/6408ca85-25ac-4483-9c2d-6cbf192111b3" />
+
 # TaskFlow
 
 TaskFlow is a fullstack task management application. It supports user
