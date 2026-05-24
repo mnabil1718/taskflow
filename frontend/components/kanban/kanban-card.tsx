@@ -8,9 +8,10 @@ import { Calendar, GripVertical, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { TaskRowActions } from "@/components/tasks/task-row-actions";
 import { formatDate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
-import type { Task, TaskPriority } from "@/lib/types";
+import type { ProjectMember, Task, TaskPriority } from "@/lib/types";
 
 const priorityBadge: Record<TaskPriority, { label: string; variant: "default" | "secondary" | "destructive" }> = {
     low: { label: "Low", variant: "secondary" },
@@ -41,9 +42,13 @@ interface KanbanCardProps {
      * DragOverlay clone so it doesn't try to claim its own sortable id
      * alongside the real card during the drag. */
     disableDnd?: boolean;
+    /** Project id + member list thread through to the edit/delete actions
+     * menu. Omitted by the DragOverlay clone, which renders no menu. */
+    projectId?: string;
+    members?: ProjectMember[];
 }
 
-export function KanbanCard({ task, sortable, disableDnd }: KanbanCardProps) {
+export function KanbanCard({ task, sortable, disableDnd, projectId, members }: KanbanCardProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
         useSortable({ id: task.id, disabled: !!disableDnd });
 
@@ -99,12 +104,26 @@ export function KanbanCard({ task, sortable, disableDnd }: KanbanCardProps) {
                             {task.title}
                         </Link>
                     </span>
-                    {sortable && (
-                        <GripVertical
-                            className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-60"
-                            aria-hidden
-                        />
-                    )}
+                    <div className="ml-auto flex items-center gap-0.5 shrink-0">
+                        {sortable && (
+                            <GripVertical
+                                className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-60"
+                                aria-hidden
+                            />
+                        )}
+                        {/* The actions trigger sits inside the drag surface,
+                            so stop the pointerdown from reaching the wrapper —
+                            otherwise opening the menu would start a drag. */}
+                        {projectId && (
+                            <span onPointerDown={(e) => e.stopPropagation()}>
+                                <TaskRowActions
+                                    task={task}
+                                    projectId={projectId}
+                                    members={members}
+                                />
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-1">

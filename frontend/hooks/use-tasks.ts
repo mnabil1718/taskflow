@@ -165,6 +165,7 @@ export function useCreateTask(projectId: string) {
         mutationFn: (data: CreateTaskRequest) => tasksApi.create(projectId, data),
         onSuccess: (task) => {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: taskKeys.board(projectId) });
             qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             toast.success(`Task "${task.title}" created`);
@@ -179,6 +180,7 @@ export function useUpdateTask(projectId: string) {
             tasksApi.update(id, data),
         onSuccess: (task) => {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: taskKeys.board(projectId) });
             qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             // The detail page reads /tasks/:id and /tasks/:id/activity
@@ -203,6 +205,7 @@ export function useUpdateTaskStatus(projectId: string) {
             tasksApi.updateStatus(id, { status }),
         onSuccess: (task) => {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: taskKeys.board(projectId) });
             qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             qc.invalidateQueries({ queryKey: ["tasks", "detail", task.id] });
@@ -218,6 +221,7 @@ export function useDeleteTask(projectId: string) {
         mutationFn: (taskId: string) => tasksApi.delete(taskId),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: taskKeys.all(projectId) });
+            qc.invalidateQueries({ queryKey: taskKeys.board(projectId) });
             qc.invalidateQueries({ queryKey: GLOBAL_TASKS_KEY });
             qc.invalidateQueries({ queryKey: ["dashboard"] });
             qc.invalidateQueries({ queryKey: ["trash"] });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { useAppForm } from "@/lib/app-form";
@@ -15,9 +15,19 @@ import {
 } from "@/components/ui/card";
 import { Brand } from "@/components/brand";
 
+// Mirrors the gate in LoginForm — keep the implementation in sync if
+// either file changes. Same open-redirect concern applies on register.
+function safeRedirectTarget(from: string | null): string {
+    if (!from) return "/dashboard";
+    if (!from.startsWith("/") || from.startsWith("//")) return "/dashboard";
+    if (from.startsWith("/login") || from.startsWith("/register")) return "/dashboard";
+    return from;
+}
+
 export function RegisterForm() {
     const { register } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const form = useAppForm({
         defaultValues: { name: "", email: "", password: "", confirm_password: "" },
@@ -28,7 +38,12 @@ export function RegisterForm() {
                     email: value.email,
                     password: value.password,
                 });
-                router.push("/dashboard");
+                router.push(safeRedirectTarget(searchParams.get("from")));
+                // See LoginForm for the rationale: hold isSubmitting
+                // through the navigation so the button keeps its
+                // spinner instead of flickering back between API
+                // success and the page swap.
+                await new Promise(() => {});
             } catch {
                 // error is toasted by the api interceptor
             }
