@@ -39,6 +39,10 @@ services:
     environment:
       APP_PORT: "8080"
       APP_ENV: production
+      # Seed demo data (2 users, 2 projects, 5 tasks) on first boot so the
+      # stack is usable immediately. The seeder is idempotent: a no-op once the
+      # data exists.
+      APP_SEED: "true"
       MIGRATIONS_PATH: migrations
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
       DB_HOST: db
@@ -47,8 +51,11 @@ services:
       DB_PASSWORD: taskflow
       DB_NAME: taskflow
       DB_SSLMODE: disable
-      JWT_ACCESS_SECRET: 8daaebfc5019945ff6eeab47b7d6a149f199c1930a0e65297195bf6d055c0a6d
-      JWT_REFRESH_SECRET: 0cb4e45f6ae61807e9de523192cb40c3eb328945b65cc1d7f6e105e5761813a0
+      # Development-only secrets so `docker compose up` works with zero config.
+      # Override with strong random values in any real deployment, e.g. by
+      # exporting JWT_ACCESS_SECRET=$(openssl rand -hex 32) before `up`.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-8daaebfc5019945ff6eeab47b7d6a149f199c1930a0e65297195bf6d055c0a6d}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-0cb4e45f6ae61807e9de523192cb40c3eb328945b65cc1d7f6e105e5761813a0}
       JWT_ACCESS_EXPIRY: "15m"
       JWT_REFRESH_EXPIRY: "168h"
     healthcheck:
