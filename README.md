@@ -53,20 +53,20 @@ seed users and does nothing if they already exist.
 
 It creates two users, two projects, and five tasks:
 
-| Email             | Password      | Role across projects                      |
-| ----------------- | ------------- | ----------------------------------------- |
-| alice@example.com | password123   | Owner of Project Alpha, member of Beta    |
-| bob@example.com   | password123   | Owner of Project Beta, member of Alpha    |
+| Email             | Password    | Role across projects                   |
+| ----------------- | ----------- | -------------------------------------- |
+| alice@example.com | password123 | Owner of Project Alpha, member of Beta |
+| bob@example.com   | password123 | Owner of Project Beta, member of Alpha |
 
 ## Service URLs
 
-| Service          | URL                                        |
-| ---------------- | ------------------------------------------ |
-| Frontend         | http://localhost:3000                      |
-| API base         | http://localhost:8080/api/v1               |
-| Swagger UI       | http://localhost:8080/swagger/index.html   |
-| Health check     | http://localhost:8080/health               |
-| PostgreSQL (host)| localhost:5433 (container port 5432)       |
+| Service           | URL                                      |
+| ----------------- | ---------------------------------------- |
+| Frontend          | http://localhost:3000                    |
+| API base          | http://localhost:8080/api/v1             |
+| Swagger UI        | http://localhost:8080/swagger/index.html |
+| Health check      | http://localhost:8080/health             |
+| PostgreSQL (host) | localhost:5433 (container port 5432)     |
 
 ## API documentation
 
@@ -106,7 +106,7 @@ the demo data. The API listens on `APP_PORT` (default 8080).
 ```bash
 cd frontend
 npm install
-echo "NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1" > .env.local
+cp .env.example .env.local
 npm run dev
 ```
 
@@ -158,6 +158,9 @@ The backend follows a strict **handler → service → repository** layering.
 Handlers never touch the database; repositories never contain business rules.
 This keeps the business logic unit-testable in isolation (services are tested
 against mock repositories) and makes the data-access boundary explicit.
+
+The `cmd` folder is an entry point for application binary. An application can have different binaries: web, cli, etc. A subfolder inside `cmd` correspond to its binary type.
+The `internal` directory is a special directory where go compiler won't expose its content to external packages: meaning our application business logic is isolated to use within this project and external project cannot import from `internal`. This is good practice to house application specific business logic.
 
 ## Architecture overview
 
