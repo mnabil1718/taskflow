@@ -20,6 +20,7 @@ type AppConfig struct {
 	Env             string
 	MigrationsPath  string
 	CORSAllowOrigins string
+	Seed            bool
 }
 
 type DBConfig struct {
@@ -54,6 +55,7 @@ func Load() (*Config, error) {
 
 	v.SetDefault("APP_PORT", "8080")
 	v.SetDefault("APP_ENV", "development")
+	v.SetDefault("APP_SEED", false)
 	v.SetDefault("MIGRATIONS_PATH", "migrations")
 	v.SetDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 	v.SetDefault("DB_HOST", "localhost")
@@ -70,6 +72,7 @@ func Load() (*Config, error) {
 			Env:              v.GetString("APP_ENV"),
 			MigrationsPath:   v.GetString("MIGRATIONS_PATH"),
 			CORSAllowOrigins: v.GetString("CORS_ALLOWED_ORIGINS"),
+			Seed:             v.GetBool("APP_SEED"),
 		},
 		DB: DBConfig{
 			Host:     v.GetString("DB_HOST"),

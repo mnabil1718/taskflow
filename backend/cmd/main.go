@@ -52,7 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if cfg.App.Env == "development" {
+	if cfg.App.Env == "development" || cfg.App.Seed {
 		if err := seeder.Run(db); err != nil {
 			slog.Error("failed to seed database", "error", err)
 			os.Exit(1)
