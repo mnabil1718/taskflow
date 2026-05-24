@@ -49,6 +49,22 @@ For efficient and reliable ranking/ordering position for drag & drop list item,
 Atlassian comes up with Lexorank algorithm.
 TypeScript library example can be seen at @LEXORANK.md
 
+## Deliverables
+
+- **Public GitHub repository** with a reasonable commit history (not a single bulk commit)
+- **README.md** containing: instructions on how to run the application, a brief architecture overview, and your design decisions
+- `docker compose up` must run successfully right away without requiring any additional manual configuration
+- **A `.env.example` file** listing all required environment variables along with their descriptions
+- **Seed data:** at least 2 users, 2 projects, and 5 tasks must be readily available after setup
+- **A Postman Collection** or an OpenAPI/Swagger file for all API endpoints
+
+## Red Flags
+
+- `docker compose up` fails to run without a valid explanation provided in the README
+- Passwords are saved in plaintext in the database (without hashing)
+- There is absolutely no input validation on the API endpoints
+- API keys, secrets, or credentials are hardcoded and pushed to the repository
+
 ## Git Workflow
 
 ### Branch strategy
@@ -117,5 +133,5 @@ Rules:
 
 ## Current phase
 
-Frontend: Next.js 14 + TanStack Query
-auth pages -> project view -> task management -> dashboard -> kanban
+Polish & Deliver
+README, Swagger/OpenAPI, bonus features, final smoke test
