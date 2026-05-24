@@ -152,6 +152,8 @@ func (s *projectService) Update(ctx context.Context, userID, projectID string, r
 		return nil, err
 	}
 
+	prevDeadline := p.Deadline
+
 	p.Name = req.Name
 	p.Description = req.Description
 	p.Status = req.Status
@@ -159,6 +161,12 @@ func (s *projectService) Update(ctx context.Context, userID, projectID string, r
 
 	if err := s.projectRepo.Update(ctx, p); err != nil {
 		return nil, err
+	}
+
+	// A changed deadline invalidates any reminder already sent against the
+	// old schedule — let the scheduler warn members again for the new one.
+	if !sameDueDate(prevDeadline, p.Deadline) {
+		_ = s.projectRepo.ClearProjectReminders(ctx, p.ID)
 	}
 
 	return p, nil

@@ -241,3 +241,26 @@ export interface UpcomingTask {
   project_id: string;
   project_name: string;
 }
+
+// Notifications
+export type NotificationType =
+  | "task.assigned"
+  | "task.deadline_reminder"
+  | "project.deadline_reminder";
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  task_id?: string;
+  project_id?: string;
+  title?: string;
+  reminder_window?: string;
+  read_at?: string | null;
+  created_at: string;
+}
+
+export interface NotificationPage {
+  items: Notification[];
+  unread_count: number;
+}

@@ -198,6 +198,14 @@ func (m *mockProjectRepo) IsMember(_ context.Context, projectID, userID string) 
 	return exists, nil
 }
 
+func (m *mockProjectRepo) PendingProjectReminders(_ context.Context, _ repository.ReminderKind) ([]*model.Project, error) {
+	return nil, nil
+}
+func (m *mockProjectRepo) MarkProjectReminderSent(_ context.Context, _ string, _ repository.ReminderKind) error {
+	return nil
+}
+func (m *mockProjectRepo) ClearProjectReminders(_ context.Context, _ string) error { return nil }
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

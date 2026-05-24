@@ -9,16 +9,16 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mnabil1718/taskflow/internal/config"
-	"github.com/mnabil1718/taskflow/internal/notifier"
+	"github.com/mnabil1718/taskflow/internal/service"
 )
 
 type Server struct {
 	app       *fiber.App
 	port      string
-	scheduler *notifier.DeadlineScheduler
+	scheduler *service.DeadlineScheduler
 }
 
-func NewServer(cfg *config.Config, app *fiber.App, scheduler *notifier.DeadlineScheduler) *Server {
+func NewServer(cfg *config.Config, app *fiber.App, scheduler *service.DeadlineScheduler) *Server {
 	return &Server{
 		app:       app,
 		port:      cfg.App.Port,
