@@ -281,12 +281,11 @@ func (s *taskService) Move(ctx context.Context, userID, taskID string, req *mode
 		}
 	}
 
-	s.notify(ctx, updated.ProjectID, notifier.Event{
-		Type:      notifier.EventTaskMoved,
-		TaskID:    updated.ID,
-		ProjectID: updated.ProjectID,
-		Task:      updated,
-	})
+	// Intentionally no SSE notification here. Move fires on every
+	// drag-and-drop — including in-column reorders — which produced
+	// a noisy notification stream that drowned out the events users
+	// actually care about (assignments, deletes, comments). Status
+	// changes are still captured in the per-task activity log.
 
 	return updated, nil
 }
@@ -405,12 +404,10 @@ func (s *taskService) UpdateStatus(ctx context.Context, userID, taskID string, r
 		return nil, err
 	}
 
-	s.notify(ctx, t.ProjectID, notifier.Event{
-		Type:      notifier.EventTaskUpdated,
-		TaskID:    t.ID,
-		ProjectID: t.ProjectID,
-		Task:      t,
-	})
+	// Intentionally no SSE notification — status changes happen
+	// constantly during normal work (kanban drags, quick-set menu
+	// items) and would flood the notification tray. The transition
+	// is still recorded in the activity log for audit.
 
 	return t, nil
 }
