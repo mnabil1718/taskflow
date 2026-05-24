@@ -63,17 +63,57 @@ definitions:
           $ref: '#/definitions/model.Task'
         type: array
     type: object
-  model.CreateProjectRequest:
+  model.BulkDeleteProjectsRequest:
     properties:
-      deadline:
-        example: "2026-12-31T23:59:59Z"
-        type: string
-      description:
-        example: All tasks for Q4 planning
-        type: string
-      name:
-        example: Q4 Roadmap
-        type: string
+      ids:
+        example:
+        - c303012a-6275-4aa3-adec-ebfb123f4567
+        - d404123b-7386-5bb4-bcfe-fcfc234e5678
+        items:
+          type: string
+        type: array
+    type: object
+  model.BulkDeleteProjectsResponse:
+    properties:
+      deleted_count:
+        example: 3
+        type: integer
+    type: object
+  model.BulkDeleteTasksRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+    type: object
+  model.BulkDeleteTasksResponse:
+    properties:
+      deleted_count:
+        type: integer
+    type: object
+  model.BulkTrashRequest:
+    properties:
+      project_ids:
+        items:
+          type: string
+        type: array
+      task_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  model.BulkTrashResponse:
+    properties:
+      purged_projects:
+        type: integer
+      purged_tasks:
+        type: integer
+      restored_projects:
+        type: integer
+      restored_tasks:
+        type: integer
+    type: object
+  model.CreateProjectRequest:
     type: object
   model.CreateTaskRequest:
     properties:
@@ -120,6 +160,38 @@ definitions:
         - $ref: '#/definitions/model.TaskStatus'
         example: in_progress
     type: object
+  model.Notification:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      project_id:
+        type: string
+      read_at:
+        type: string
+      reminder_window:
+        example: 3d
+        type: string
+      task_id:
+        type: string
+      title:
+        type: string
+      type:
+        example: task.assigned
+        type: string
+      user_id:
+        type: string
+    type: object
+  model.NotificationPage:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/model.Notification'
+        type: array
+      unread_count:
+        type: integer
+    type: object
   model.Project:
     properties:
       created_at:
@@ -152,6 +224,16 @@ definitions:
       role:
         $ref: '#/definitions/model.ProjectRole'
       user_id:
+        type: string
+    type: object
+  model.ProjectMemberInvite:
+    properties:
+      role:
+        allOf:
+        - $ref: '#/definitions/model.ProjectRole'
+        example: member
+      user_id:
+        example: c303012a-6275-4aa3-adec-ebfb123f4567
         type: string
     type: object
   model.ProjectRole:
@@ -213,8 +295,14 @@ definitions:
     type: object
   model.Task:
     properties:
+      assignee_email:
+        example: jane@example.com
+        type: string
       assignee_id:
         example: f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd
+        type: string
+      assignee_name:
+        example: Jane Doe
         type: string
       created_at:
         example: "2026-05-20T09:15:00Z"
@@ -257,6 +345,9 @@ definitions:
       changed_by:
         example: 6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f
         type: string
+      changed_by_name:
+        example: Jane Doe
+        type: string
       created_at:
         example: "2026-05-20T10:00:00Z"
         type: string
@@ -274,6 +365,16 @@ definitions:
         allOf:
         - $ref: '#/definitions/model.TaskStatus'
         example: in_progress
+    type: object
+  model.TaskActivityLogPage:
+    properties:
+      has_more:
+        example: true
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/model.TaskActivityLog'
+        type: array
     type: object
   model.TaskPriority:
     enum:
@@ -304,6 +405,39 @@ definitions:
         example: k9F2pQ7sR1tU4vWxYz0AbCdEfGhIjKlMnOpQrStUvWx=
         type: string
     type: object
+  model.TrashItem:
+    properties:
+      deleted_at:
+        example: "2026-05-23T09:15:00Z"
+        type: string
+      id:
+        example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        type: string
+      kind:
+        allOf:
+        - $ref: '#/definitions/model.TrashKind'
+        example: task
+      project_id:
+        example: c303012a-6275-4aa3-adec-ebfb123f4567
+        type: string
+      project_name:
+        example: Auth rework
+        type: string
+      task_count:
+        example: 5
+        type: integer
+      title:
+        example: Wire up auth middleware
+        type: string
+    type: object
+  model.TrashKind:
+    enum:
+    - project
+    - task
+    type: string
+    x-enum-varnames:
+    - TrashKindProject
+    - TrashKindTask
   model.UpcomingTask:
     properties:
       due_date:
@@ -369,43 +503,26 @@ definitions:
         example: Wire up auth middleware (revised)
         type: string
     type: object
-  notifier.Event:
+  model.UpdateTaskStatusRequest:
     properties:
-      project_id:
-        example: c303012a-6275-4aa3-adec-ebfb123f4567
-        type: string
-      reminder_window:
-        example: 3d
-        type: string
-      task:
-        $ref: '#/definitions/model.Task'
-      task_id:
-        example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
-        type: string
-      timestamp:
-        example: "2026-05-20T16:00:00Z"
-        type: string
-      type:
+      status:
         allOf:
-        - $ref: '#/definitions/notifier.EventType'
-        example: task.created
+        - $ref: '#/definitions/model.TaskStatus'
+        example: in_progress
     type: object
-  notifier.EventType:
-    enum:
-    - task.created
-    - task.updated
-    - task.deleted
-    - task.assigned
-    - task.moved
-    - task.deadline_reminder
-    type: string
-    x-enum-varnames:
-    - EventTaskCreated
-    - EventTaskUpdated
-    - EventTaskDeleted
-    - EventTaskAssigned
-    - EventTaskMoved
-    - EventTaskDeadlineReminder
+  model.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
   response.Body:
     properties:
       data:
@@ -650,56 +767,129 @@ paths:
       summary: Upcoming tasks assigned to the caller
       tags:
       - dashboard
+  /notifications:
+    get:
+      description: |-
+        Returns the caller's most-recent notifications (newest first) plus the
+        count of unread ones for the bell badge. Notifications are created only
+        for: a task assigned to the caller, and task/project deadline reminders
+        (3 days then 1 day before the deadline).
+      parameters:
+      - description: Max items to return (default 50, max 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notifications retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.NotificationPage'
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List the caller's notifications
+      tags:
+      - notifications
+  /notifications/{id}/read:
+    post:
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notification marked read
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Mark one notification as read
+      tags:
+      - notifications
+  /notifications/read-all:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notifications marked read
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Mark all the caller's notifications as read
+      tags:
+      - notifications
   /notifications/stream:
     get:
       description: |-
-        Opens a long-lived SSE connection that pushes task events to the
-        caller. The set of events the caller receives depends on the event
-        type — see "Routing" below.
+        Opens a long-lived SSE connection that pushes the caller's notifications
+        live as they are created. Each pushed item is the same model.Notification
+        shape as the list endpoint (matched by id), so a client merges live items
+        into the fetched list without duplicates.
 
-        Event types:
-        - task.created           — a new task was created in a project the caller is a member of
-        - task.updated           — a task in such a project was updated
-        - task.deleted           — a task in such a project was deleted
-        - task.assigned          — a task's assignee was changed (assign or unassign)
-        - task.deadline_reminder — the caller is the assignee of an open task whose due_date is approaching
+        Notification types:
+        - task.assigned             — a task was assigned to the caller
+        - task.deadline_reminder    — a task assigned to the caller is approaching its due date
+        - project.deadline_reminder — a project the caller is a member of is approaching its deadline
 
-        Routing:
-        - task.created / updated / deleted / assigned are fanned out to **every member** of the affected project (team feed).
-        - task.deadline_reminder is sent **only to the assignee** of the task.
+        Deadline reminders fire in two windows (3 days then 1 day before); the
+        `reminder_window` field is "3d" or "1d" accordingly.
 
-        Deadline reminders fire in two windows per task: when the deadline
-        is within 3 days, and again when it is within 1 day. The
-        `reminder_window` field on the event payload is "3d" or "1d"
-        accordingly. Each window fires at most once per (task, window) pair;
-        changing the task's due_date or assignee resets the windows so the
-        new schedule / new assignee gets fresh warnings. Done tasks and
-        unassigned tasks never receive reminders.
-
-        Wire format: text/event-stream. Each event arrives as two lines
-        followed by a blank line:
+        Wire format: text/event-stream. Each event arrives as two lines followed
+        by a blank line:
         event: <type>
-        data:  <json-encoded notifier.Event>
+        data:  <json-encoded model.Notification>
 
-        A `: ping` comment line is sent every 15 seconds to keep the
-        connection alive through proxies. Native browser EventSource does
-        not support custom headers; clients can either use fetch-based
-        streaming or an EventSource polyfill that allows headers.
+        A `: ping` comment is sent every 15 seconds to keep the connection alive.
       produces:
       - text/event-stream
       responses:
         "200":
-          description: Schema of the JSON payload carried in each event's `data:`
-            line. `reminder_window` is present only on task.deadline_reminder events.
+          description: 'JSON payload carried in each event''s data: line'
           schema:
-            $ref: '#/definitions/notifier.Event'
+            $ref: '#/definitions/model.Notification'
         "401":
           description: Missing or invalid token
           schema:
             $ref: '#/definitions/response.Body'
       security:
       - BearerAuth: []
-      summary: Stream task notifications (Server-Sent Events)
+      summary: Stream notifications (Server-Sent Events)
       tags:
       - notifications
   /projects:
@@ -783,8 +973,7 @@ paths:
       - projects
   /projects/{id}:
     delete:
-      description: Permanently deletes a project and all its tasks. Only the owner
-        can delete.
+      description: Soft-deletes a project. Only the owner can delete.
       parameters:
       - description: Project UUID
         in: path
@@ -1225,6 +1414,117 @@ paths:
       summary: Create a task in a project
       tags:
       - tasks
+  /projects/bulk-delete:
+    post:
+      consumes:
+      - application/json
+      description: Soft-deletes every project the caller owns from the given list.
+        IDs the caller does not own — or that don't exist — are silently skipped.
+        Returns the number of projects actually deleted.
+      parameters:
+      - description: IDs to delete
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.BulkDeleteProjectsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Projects deleted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.BulkDeleteProjectsResponse'
+              type: object
+        "400":
+          description: Validation error or malformed body
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bulk soft-delete projects
+      tags:
+      - projects
+  /tasks:
+    get:
+      description: |-
+        Returns a paginated list of tasks from every project the caller is a member of.
+        Supports the same filters and sorting as the project-scoped list.
+      parameters:
+      - description: Search tasks by title (case-insensitive)
+        in: query
+        name: q
+        type: string
+      - description: 'Filter by status: todo, in_progress, done'
+        in: query
+        name: status
+        type: string
+      - description: 'Filter by priority: low, medium, high'
+        in: query
+        name: priority
+        type: string
+      - description: Filter by assignee UUID
+        in: query
+        name: assignee_id
+        type: string
+      - description: 'Sort column: status, priority, due_date, updated_at, title,
+          created_at (default created_at)'
+        in: query
+        name: sort_by
+        type: string
+      - description: 'Sort direction: asc or desc (default desc)'
+        in: query
+        name: sort_order
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Items per page, max 100 (default 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tasks retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.TaskPage'
+              type: object
+        "400":
+          description: Invalid filter value
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List tasks across all user's projects
+      tags:
+      - tasks
   /tasks/{taskID}:
     delete:
       description: Permanently deletes a task. Only the project owner or the task
@@ -1357,12 +1657,23 @@ paths:
     get:
       description: |-
         Returns the task's status-transition log in reverse chronological order.
-        The caller must be a member of the task's project.
+        The caller must be a member of the task's project. Cursor pagination via
+        `before`: pass the CreatedAt of the oldest entry currently rendered to
+        fetch the next page. The envelope reports has_more so the UI can decide
+        whether to show "Load more".
       parameters:
       - description: Task UUID
         in: path
         name: taskID
         required: true
+        type: string
+      - description: Page size (default 10, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: RFC3339 cursor — fetch entries created before this time
+        in: query
+        name: before
         type: string
       produces:
       - application/json
@@ -1374,10 +1685,12 @@ paths:
             - $ref: '#/definitions/response.Body'
             - properties:
                 data:
-                  items:
-                    $ref: '#/definitions/model.TaskActivityLog'
-                  type: array
+                  $ref: '#/definitions/model.TaskActivityLogPage'
               type: object
+        "400":
+          description: Invalid cursor
+          schema:
+            $ref: '#/definitions/response.Body'
         "401":
           description: Missing or invalid token
           schema:
@@ -1500,6 +1813,296 @@ paths:
       summary: Move a task on the Kanban board
       tags:
       - tasks
+  /tasks/{taskID}/status:
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Member-allowed status-only mutation. Any project member can
+        call this endpoint; non-status fields can't be changed here
+        (use PUT /tasks/{taskID} for that, which is owner-only).
+        The transition is recorded in the activity log.
+      parameters:
+      - description: Task UUID
+        in: path
+        name: taskID
+        required: true
+        type: string
+      - description: New status
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateTaskStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task status updated
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Task'
+              type: object
+        "400":
+          description: Malformed body or invalid status
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: Task not found or caller is not a project member
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Update a task's status
+      tags:
+      - tasks
+  /tasks/bulk-delete:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Deletes tasks the caller is authorised to remove (project owner or task creator).
+        Tasks in the list that don't meet the permission check are silently skipped.
+      parameters:
+      - description: Task IDs (max 100)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.BulkDeleteTasksRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tasks deleted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.BulkDeleteTasksResponse'
+              type: object
+        "400":
+          description: Validation error or malformed body
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Bulk-delete tasks
+      tags:
+      - tasks
+  /trash:
+    delete:
+      description: |-
+        Permanently deletes every trashed project (owner-scoped) and
+        every trashed task (project-owner or task-creator scoped) in
+        one shot. No body required.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trash emptied
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.BulkTrashResponse'
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Empty the trash
+      tags:
+      - trash
+    get:
+      description: |-
+        Returns soft-deleted projects (owner-scoped) and soft-deleted
+        tasks (project-owner or task-creator scoped, and only when the
+        task's project itself is still active) in a single feed
+        ordered by deleted_at descending.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trash retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/model.TrashItem'
+                  type: array
+              type: object
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List trashed items
+      tags:
+      - trash
+  /trash/purge:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Deletes the listed projects/tasks for good. Purging a project
+        cascades to its tasks via the FK.
+      parameters:
+      - description: IDs to purge
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.BulkTrashRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Items purged
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.BulkTrashResponse'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Permanently delete items from trash
+      tags:
+      - trash
+  /trash/restore:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Clears deleted_at on the listed projects/tasks the caller is
+        allowed to restore. Items missing the right permissions or
+        whose parent project is itself trashed are silently skipped.
+      parameters:
+      - description: IDs to restore
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.BulkTrashRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Items restored
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.BulkTrashResponse'
+              type: object
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Restore items from trash
+      tags:
+      - trash
+  /users/search:
+    get:
+      description: |-
+        Returns up to 10 users whose name or email contains the query.
+        The caller is excluded from results — invite pickers never suggest the user to themselves.
+      parameters:
+      - description: Name or email substring (min 1 char)
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Users matched
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/model.User'
+                  type: array
+              type: object
+        "400":
+          description: Empty query
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Search users
+      tags:
+      - users
 schemes:
 - http
 - https

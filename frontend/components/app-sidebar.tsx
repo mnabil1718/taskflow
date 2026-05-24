@@ -74,11 +74,14 @@ export function AppSidebar() {
                     <SidebarGroupContent>
                         <SidebarMenu>
                             {navItems.map((item) => (
-                                <SidebarMenuItem key={item.href}>
+                                <SidebarMenuItem
+                                    key={item.href}
+                                >
                                     <SidebarMenuButton
                                         render={<Link href={item.href} onClick={handleNavigate} />}
                                         isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
                                         tooltip={item.title}
+                                        className={cn(item.title === "Trash" ? "text-destructive!" : "")}
                                     >
                                         <item.icon />
                                         <span>{item.title}</span>

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/mnabil1718/taskflow/internal/model"
-	"github.com/mnabil1718/taskflow/internal/notifier"
 	"github.com/mnabil1718/taskflow/internal/repository"
 )
 
@@ -34,26 +33,21 @@ type TaskService interface {
 type taskService struct {
 	taskRepo    repository.TaskRepository
 	projectRepo repository.ProjectRepository
-	hub         *notifier.Hub
+	notif       NotificationService
 }
 
-func NewTaskService(taskRepo repository.TaskRepository, projectRepo repository.ProjectRepository, hub *notifier.Hub) TaskService {
-	return &taskService{taskRepo: taskRepo, projectRepo: projectRepo, hub: hub}
+func NewTaskService(taskRepo repository.TaskRepository, projectRepo repository.ProjectRepository, notif NotificationService) TaskService {
+	return &taskService{taskRepo: taskRepo, projectRepo: projectRepo, notif: notif}
 }
 
-// notify fans out a task event to every member of the task's project.
-// Failures here are swallowed so that a notifier hiccup never breaks a
-// mutation that has already committed.
-func (s *taskService) notify(ctx context.Context, projectID string, ev notifier.Event) {
-	members, err := s.projectRepo.GetMembers(ctx, projectID)
-	if err != nil {
+// notifyAssignee fires a "task assigned" notification to a newly-assigned
+// user. It is a no-op when the assignee is unchanged, cleared, or the actor
+// assigned the task to themselves — none of those warrant a notification.
+func (s *taskService) notifyAssignee(ctx context.Context, actorID string, prev, next *string, t *model.Task) {
+	if next == nil || sameAssignee(prev, next) || *next == actorID {
 		return
 	}
-	recipients := make([]string, 0, len(members))
-	for _, m := range members {
-		recipients = append(recipients, m.UserID)
-	}
-	s.hub.Publish(recipients, ev)
+	s.notif.NotifyTaskAssigned(ctx, *next, t)
 }
 
 func (s *taskService) Create(ctx context.Context, userID, projectID string, req *model.CreateTaskRequest) (*model.Task, error) {
@@ -117,12 +111,10 @@ func (s *taskService) Create(ctx context.Context, userID, projectID string, req 
 		return nil, err
 	}
 
-	s.notify(ctx, t.ProjectID, notifier.Event{
-		Type:      notifier.EventTaskCreated,
-		TaskID:    t.ID,
-		ProjectID: t.ProjectID,
-		Task:      t,
-	})
+	// Creating a task already assigned to someone else counts as assigning
+	// it to them. prev is nil (brand-new task) so this fires whenever the
+	// assignee is set and isn't the creator.
+	s.notifyAssignee(ctx, userID, nil, t.AssigneeID, t)
 
 	return t, nil
 }
@@ -323,6 +315,7 @@ func (s *taskService) Update(ctx context.Context, userID, taskID string, req *mo
 
 	prevStatus := t.Status
 	prevDue := t.DueDate
+	prevAssignee := t.AssigneeID
 
 	t.Title = req.Title
 	t.Description = req.Description
@@ -348,12 +341,12 @@ func (s *taskService) Update(ctx context.Context, userID, taskID string, req *mo
 		_ = s.taskRepo.ClearReminders(ctx, t.ID)
 	}
 
-	s.notify(ctx, t.ProjectID, notifier.Event{
-		Type:      notifier.EventTaskUpdated,
-		TaskID:    t.ID,
-		ProjectID: t.ProjectID,
-		Task:      t,
-	})
+	// Reassigning via the edit form is an assignment too — notify the new
+	// assignee (notifyAssignee no-ops if it didn't actually change).
+	if !sameAssignee(prevAssignee, t.AssigneeID) {
+		_ = s.taskRepo.ClearReminders(ctx, t.ID)
+		s.notifyAssignee(ctx, userID, prevAssignee, t.AssigneeID, t)
+	}
 
 	return t, nil
 }
@@ -433,12 +426,6 @@ func (s *taskService) Delete(ctx context.Context, userID, taskID string) error {
 		return err
 	}
 
-	s.notify(ctx, t.ProjectID, notifier.Event{
-		Type:      notifier.EventTaskDeleted,
-		TaskID:    taskID,
-		ProjectID: t.ProjectID,
-	})
-
 	return nil
 }
 
@@ -482,17 +469,12 @@ func (s *taskService) Assign(ctx context.Context, userID, taskID string, req *mo
 	t.AssigneeID = assignee
 
 	// Assignment change means the new assignee hasn't been warned about the
-	// deadline yet — reset the per-task reminder flags so they fire again.
+	// deadline yet — reset the per-task reminder flags so they fire again,
+	// and notify the new assignee (no-op on unassign or self-assign).
 	if !sameAssignee(prevAssignee, t.AssigneeID) {
 		_ = s.taskRepo.ClearReminders(ctx, t.ID)
+		s.notifyAssignee(ctx, userID, prevAssignee, t.AssigneeID, t)
 	}
-
-	s.notify(ctx, t.ProjectID, notifier.Event{
-		Type:      notifier.EventTaskAssigned,
-		TaskID:    t.ID,
-		ProjectID: t.ProjectID,
-		Task:      t,
-	})
 
 	return t, nil
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "@/lib/date-utils";
@@ -10,30 +11,40 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-    type NotificationItem,
-    type NotificationEventType,
-} from "@/hooks/use-sse-notifications";
+import type { Notification } from "@/lib/types";
 
-const EVENT_LABELS: Record<NotificationEventType, string> = {
-    "task.created": "Task created",
-    "task.updated": "Task updated",
-    "task.deleted": "Task deleted",
-    "task.assigned": "Task assigned",
-    "task.moved": "Task moved",
-    "task.deadline_reminder": "Deadline reminder",
-};
+function windowLabel(window?: string): string {
+    if (window === "3d") return "in 3 days";
+    if (window === "1d") return "in 1 day";
+    return "soon";
+}
 
-function notificationMessage(n: NotificationItem): string {
-    if (n.type === "task.deadline_reminder" && n.reminderWindow) {
-        return `Due in ${n.reminderWindow}: ${n.taskTitle ?? "a task"}`;
+// Human-readable line per notification. Deadline reminders lead with the
+// window so the urgency reads first; an assignment names the task.
+function notificationMessage(n: Notification): string {
+    const title = n.title ?? "Untitled";
+    switch (n.type) {
+        case "task.assigned":
+            return `Assigned to you: ${title}`;
+        case "task.deadline_reminder":
+            return `Task due ${windowLabel(n.reminder_window)}: ${title}`;
+        case "project.deadline_reminder":
+            return `Project due ${windowLabel(n.reminder_window)}: ${title}`;
+        default:
+            return title;
     }
-    const label = EVENT_LABELS[n.type];
-    return n.taskTitle ? `${label}: ${n.taskTitle}` : label;
+}
+
+// Where clicking a notification takes the user. Task notifications open the
+// task detail; project deadline reminders open the project.
+function notificationHref(n: Notification): string {
+    if (n.task_id) return `/tasks/${n.task_id}`;
+    if (n.project_id) return `/projects/${n.project_id}`;
+    return "#";
 }
 
 interface NotificationTrayProps {
-    notifications: NotificationItem[];
+    notifications: Notification[];
     unreadCount: number;
     onMarkAllRead: () => void;
     onMarkRead: (id: string) => void;
@@ -84,26 +95,28 @@ export function NotificationTray({
                     ) : (
                         <ul>
                             {notifications.map((n) => (
-                                <li
-                                    key={n.id}
-                                    onClick={() => onMarkRead(n.id)}
-                                    className={cn(
-                                        "flex cursor-pointer gap-2 px-3 py-2.5 hover:bg-accent",
-                                        !n.read && "bg-accent/40"
-                                    )}
-                                >
-                                    <span
+                                <li key={n.id}>
+                                    <Link
+                                        href={notificationHref(n)}
+                                        onClick={() => onMarkRead(n.id)}
                                         className={cn(
-                                            "mt-1.5 size-2 shrink-0 rounded-full",
-                                            n.read ? "bg-transparent" : "bg-primary"
+                                            "flex gap-2 px-3 py-2.5 hover:bg-accent",
+                                            !n.read_at && "bg-accent/40"
                                         )}
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm">{notificationMessage(n)}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {formatDistanceToNow(n.timestamp)}
-                                        </p>
-                                    </div>
+                                    >
+                                        <span
+                                            className={cn(
+                                                "mt-1.5 size-2 shrink-0 rounded-full",
+                                                n.read_at ? "bg-transparent" : "bg-primary"
+                                            )}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm">{notificationMessage(n)}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatDistanceToNow(n.created_at)}
+                                            </p>
+                                        </div>
+                                    </Link>
                                 </li>
                             ))}
                         </ul>

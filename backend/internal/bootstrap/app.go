@@ -99,7 +99,10 @@ func registerRoutes(app *fiber.App, authSvc service.AuthService, health *handler
 	dash.Get("/upcoming-tasks", dashboard.UpcomingTasks)
 
 	notifications := protected.Group("/notifications")
+	notifications.Get("", notif.List)
 	notifications.Get("/stream", notif.Stream)
+	notifications.Post("/read-all", notif.MarkAllRead)
+	notifications.Post("/:id/read", notif.MarkRead)
 
 	users := protected.Group("/users")
 	users.Get("/search", user.Search)

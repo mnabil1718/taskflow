@@ -8,57 +8,108 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mnabil1718/taskflow/internal/notifier"
+	"github.com/mnabil1718/taskflow/internal/response"
+	"github.com/mnabil1718/taskflow/internal/service"
 	"github.com/valyala/fasthttp"
 )
 
 const sseHeartbeatInterval = 15 * time.Second
 
 type NotificationHandler struct {
+	svc service.NotificationService
 	hub *notifier.Hub
 }
 
-func NewNotificationHandler(hub *notifier.Hub) *NotificationHandler {
-	return &NotificationHandler{hub: hub}
+func NewNotificationHandler(svc service.NotificationService, hub *notifier.Hub) *NotificationHandler {
+	return &NotificationHandler{svc: svc, hub: hub}
+}
+
+// List godoc
+// @Summary      List the caller's notifications
+// @Description  Returns the caller's most-recent notifications (newest first) plus the
+// @Description  count of unread ones for the bell badge. Notifications are created only
+// @Description  for: a task assigned to the caller, and task/project deadline reminders
+// @Description  (3 days then 1 day before the deadline).
+// @Tags         notifications
+// @Produce      json
+// @Param        limit query int false "Max items to return (default 50, max 100)"
+// @Success      200 {object} response.Body{data=model.NotificationPage} "Notifications retrieved"
+// @Failure      401 {object} response.Body "Missing or invalid token"
+// @Failure      500 {object} response.Body "Internal server error"
+// @Security     BearerAuth
+// @Router       /notifications [get]
+func (h *NotificationHandler) List(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	page, err := h.svc.List(c.Context(), userID, c.QueryInt("limit", 0))
+	if err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "internal server error")
+	}
+	return response.Success(c, fiber.StatusOK, "notifications retrieved", page)
+}
+
+// MarkRead godoc
+// @Summary      Mark one notification as read
+// @Tags         notifications
+// @Produce      json
+// @Param        id path string true "Notification ID"
+// @Success      200 {object} response.Body "Notification marked read"
+// @Failure      401 {object} response.Body "Missing or invalid token"
+// @Failure      500 {object} response.Body "Internal server error"
+// @Security     BearerAuth
+// @Router       /notifications/{id}/read [post]
+func (h *NotificationHandler) MarkRead(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	if err := h.svc.MarkRead(c.Context(), userID, c.Params("id")); err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "internal server error")
+	}
+	return response.Success(c, fiber.StatusOK, "notification marked read", nil)
+}
+
+// MarkAllRead godoc
+// @Summary      Mark all the caller's notifications as read
+// @Tags         notifications
+// @Produce      json
+// @Success      200 {object} response.Body "Notifications marked read"
+// @Failure      401 {object} response.Body "Missing or invalid token"
+// @Failure      500 {object} response.Body "Internal server error"
+// @Security     BearerAuth
+// @Router       /notifications/read-all [post]
+func (h *NotificationHandler) MarkAllRead(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+
+	if err := h.svc.MarkAllRead(c.Context(), userID); err != nil {
+		return response.Error(c, fiber.StatusInternalServerError, "internal server error")
+	}
+	return response.Success(c, fiber.StatusOK, "notifications marked read", nil)
 }
 
 // Stream godoc
-// @Summary      Stream task notifications (Server-Sent Events)
-// @Description  Opens a long-lived SSE connection that pushes task events to the
-// @Description  caller. The set of events the caller receives depends on the event
-// @Description  type — see "Routing" below.
+// @Summary      Stream notifications (Server-Sent Events)
+// @Description  Opens a long-lived SSE connection that pushes the caller's notifications
+// @Description  live as they are created. Each pushed item is the same model.Notification
+// @Description  shape as the list endpoint (matched by id), so a client merges live items
+// @Description  into the fetched list without duplicates.
 // @Description
-// @Description  Event types:
-// @Description    - task.created           — a new task was created in a project the caller is a member of
-// @Description    - task.updated           — a task in such a project was updated
-// @Description    - task.deleted           — a task in such a project was deleted
-// @Description    - task.assigned          — a task's assignee was changed (assign or unassign)
-// @Description    - task.deadline_reminder — the caller is the assignee of an open task whose due_date is approaching
+// @Description  Notification types:
+// @Description    - task.assigned             — a task was assigned to the caller
+// @Description    - task.deadline_reminder    — a task assigned to the caller is approaching its due date
+// @Description    - project.deadline_reminder — a project the caller is a member of is approaching its deadline
 // @Description
-// @Description  Routing:
-// @Description    - task.created / updated / deleted / assigned are fanned out to **every member** of the affected project (team feed).
-// @Description    - task.deadline_reminder is sent **only to the assignee** of the task.
+// @Description  Deadline reminders fire in two windows (3 days then 1 day before); the
+// @Description  `reminder_window` field is "3d" or "1d" accordingly.
 // @Description
-// @Description  Deadline reminders fire in two windows per task: when the deadline
-// @Description  is within 3 days, and again when it is within 1 day. The
-// @Description  `reminder_window` field on the event payload is "3d" or "1d"
-// @Description  accordingly. Each window fires at most once per (task, window) pair;
-// @Description  changing the task's due_date or assignee resets the windows so the
-// @Description  new schedule / new assignee gets fresh warnings. Done tasks and
-// @Description  unassigned tasks never receive reminders.
-// @Description
-// @Description  Wire format: text/event-stream. Each event arrives as two lines
-// @Description  followed by a blank line:
+// @Description  Wire format: text/event-stream. Each event arrives as two lines followed
+// @Description  by a blank line:
 // @Description    event: <type>
-// @Description    data:  <json-encoded notifier.Event>
+// @Description    data:  <json-encoded model.Notification>
 // @Description
-// @Description  A `: ping` comment line is sent every 15 seconds to keep the
-// @Description  connection alive through proxies. Native browser EventSource does
-// @Description  not support custom headers; clients can either use fetch-based
-// @Description  streaming or an EventSource polyfill that allows headers.
+// @Description  A `: ping` comment is sent every 15 seconds to keep the connection alive.
 // @Tags         notifications
 // @Produce      text/event-stream
-// @Success      200 {object} notifier.Event "Schema of the JSON payload carried in each event's `data:` line. `reminder_window` is present only on task.deadline_reminder events."
-// @Failure      401 {object} response.Body  "Missing or invalid token"
+// @Success      200 {object} model.Notification "JSON payload carried in each event's data: line"
+// @Failure      401 {object} response.Body      "Missing or invalid token"
 // @Security     BearerAuth
 // @Router       /notifications/stream [get]
 func (h *NotificationHandler) Stream(c *fiber.Ctx) error {
@@ -86,15 +137,15 @@ func (h *NotificationHandler) Stream(c *fiber.Ctx) error {
 
 		for {
 			select {
-			case ev, ok := <-sub.Events():
+			case n, ok := <-sub.Events():
 				if !ok {
 					return
 				}
-				payload, err := json.Marshal(ev)
+				payload, err := json.Marshal(n)
 				if err != nil {
 					continue
 				}
-				if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", ev.Type, payload); err != nil {
+				if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", n.Type, payload); err != nil {
 					return
 				}
 				if err := w.Flush(); err != nil {

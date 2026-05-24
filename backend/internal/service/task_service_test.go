@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mnabil1718/taskflow/internal/model"
-	"github.com/mnabil1718/taskflow/internal/notifier"
 	"github.com/mnabil1718/taskflow/internal/repository"
 	"github.com/mnabil1718/taskflow/internal/service"
 )
@@ -128,7 +127,7 @@ func (m *mockTaskRepo) LogStatusChange(_ context.Context, taskID string, changed
 	return nil
 }
 
-func (m *mockTaskRepo) GetActivityLogs(_ context.Context, taskID string) ([]*model.TaskActivityLog, error) {
+func (m *mockTaskRepo) GetActivityLogs(_ context.Context, taskID string, _ model.TaskActivityLogFilter) ([]*model.TaskActivityLog, error) {
 	out := make([]*model.TaskActivityLog, 0, len(m.logs))
 	for _, l := range m.logs {
 		if l.taskID == taskID {
@@ -136,6 +135,26 @@ func (m *mockTaskRepo) GetActivityLogs(_ context.Context, taskID string) ([]*mod
 		}
 	}
 	return out, nil
+}
+
+func (m *mockTaskRepo) ListAll(_ context.Context, _ string, _ model.TaskFilter) ([]*model.Task, int, error) {
+	out := make([]*model.Task, 0, len(m.tasks))
+	for _, t := range m.tasks {
+		cp := *t
+		out = append(out, &cp)
+	}
+	return out, len(out), nil
+}
+
+func (m *mockTaskRepo) BulkDelete(_ context.Context, _ string, ids []string) (int, error) {
+	count := 0
+	for _, id := range ids {
+		if _, ok := m.tasks[id]; ok {
+			delete(m.tasks, id)
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (m *mockTaskRepo) PendingReminders(_ context.Context, _ repository.ReminderKind) ([]*model.Task, error) {
@@ -147,11 +166,30 @@ func (m *mockTaskRepo) MarkReminderSent(_ context.Context, _ string, _ repositor
 func (m *mockTaskRepo) ClearReminders(_ context.Context, _ string) error { return nil }
 
 // ---------------------------------------------------------------------------
+// stubNotificationService — no-op NotificationService for task tests. The
+// task service's notification calls are fire-and-forget side effects, so the
+// tests only need an implementation that satisfies the interface.
+// ---------------------------------------------------------------------------
+
+type stubNotificationService struct{}
+
+func (stubNotificationService) List(_ context.Context, _ string, _ int) (*model.NotificationPage, error) {
+	return &model.NotificationPage{}, nil
+}
+func (stubNotificationService) MarkRead(_ context.Context, _, _ string) error  { return nil }
+func (stubNotificationService) MarkAllRead(_ context.Context, _ string) error  { return nil }
+func (stubNotificationService) NotifyTaskAssigned(_ context.Context, _ string, _ *model.Task) {}
+func (stubNotificationService) NotifyTaskDeadline(_ context.Context, _ string, _ *model.Task, _ string) {
+}
+func (stubNotificationService) NotifyProjectDeadline(_ context.Context, _ string, _ *model.Project, _ string) {
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 func newTaskSvc(tr *mockTaskRepo, pr *mockProjectRepo) service.TaskService {
-	return service.NewTaskService(tr, pr, notifier.NewHub())
+	return service.NewTaskService(tr, pr, stubNotificationService{})
 }
 
 // seedTask directly writes a task into the mock repo.

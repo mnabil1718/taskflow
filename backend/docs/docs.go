@@ -365,6 +365,99 @@ const docTemplate = `{
                 }
             }
         },
+        "/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the caller's most-recent notifications (newest first) plus the\ncount of unread ones for the bell badge. Notifications are created only\nfor: a task assigned to the caller, and task/project deadline reminders\n(3 days then 1 day before the deadline).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "List the caller's notifications",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Max items to return (default 50, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notifications retrieved",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.NotificationPage"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/read-all": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Mark all the caller's notifications as read",
+                "responses": {
+                    "200": {
+                        "description": "Notifications marked read",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/notifications/stream": {
             "get": {
                 "security": [
@@ -372,23 +465,68 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Opens a long-lived SSE connection that pushes task events to the\ncaller. The set of events the caller receives depends on the event\ntype — see \"Routing\" below.\n\nEvent types:\n- task.created           — a new task was created in a project the caller is a member of\n- task.updated           — a task in such a project was updated\n- task.deleted           — a task in such a project was deleted\n- task.assigned          — a task's assignee was changed (assign or unassign)\n- task.deadline_reminder — the caller is the assignee of an open task whose due_date is approaching\n\nRouting:\n- task.created / updated / deleted / assigned are fanned out to **every member** of the affected project (team feed).\n- task.deadline_reminder is sent **only to the assignee** of the task.\n\nDeadline reminders fire in two windows per task: when the deadline\nis within 3 days, and again when it is within 1 day. The\n` + "`" + `reminder_window` + "`" + ` field on the event payload is \"3d\" or \"1d\"\naccordingly. Each window fires at most once per (task, window) pair;\nchanging the task's due_date or assignee resets the windows so the\nnew schedule / new assignee gets fresh warnings. Done tasks and\nunassigned tasks never receive reminders.\n\nWire format: text/event-stream. Each event arrives as two lines\nfollowed by a blank line:\nevent: \u003ctype\u003e\ndata:  \u003cjson-encoded notifier.Event\u003e\n\nA ` + "`" + `: ping` + "`" + ` comment line is sent every 15 seconds to keep the\nconnection alive through proxies. Native browser EventSource does\nnot support custom headers; clients can either use fetch-based\nstreaming or an EventSource polyfill that allows headers.",
+                "description": "Opens a long-lived SSE connection that pushes the caller's notifications\nlive as they are created. Each pushed item is the same model.Notification\nshape as the list endpoint (matched by id), so a client merges live items\ninto the fetched list without duplicates.\n\nNotification types:\n- task.assigned             — a task was assigned to the caller\n- task.deadline_reminder    — a task assigned to the caller is approaching its due date\n- project.deadline_reminder — a project the caller is a member of is approaching its deadline\n\nDeadline reminders fire in two windows (3 days then 1 day before); the\n` + "`" + `reminder_window` + "`" + ` field is \"3d\" or \"1d\" accordingly.\n\nWire format: text/event-stream. Each event arrives as two lines followed\nby a blank line:\nevent: \u003ctype\u003e\ndata:  \u003cjson-encoded model.Notification\u003e\n\nA ` + "`" + `: ping` + "`" + ` comment is sent every 15 seconds to keep the connection alive.",
                 "produces": [
                     "text/event-stream"
                 ],
                 "tags": [
                     "notifications"
                 ],
-                "summary": "Stream task notifications (Server-Sent Events)",
+                "summary": "Stream notifications (Server-Sent Events)",
                 "responses": {
                     "200": {
-                        "description": "Schema of the JSON payload carried in each event's ` + "`" + `data:` + "`" + ` line. ` + "`" + `reminder_window` + "`" + ` is present only on task.deadline_reminder events.",
+                        "description": "JSON payload carried in each event's data: line",
                         "schema": {
-                            "$ref": "#/definitions/notifier.Event"
+                            "$ref": "#/definitions/model.Notification"
                         }
                     },
                     "401": {
                         "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}/read": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Mark one notification as read",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Notification ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notification marked read",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -499,6 +637,75 @@ const docTemplate = `{
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/model.Project"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or malformed body",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/bulk-delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-deletes every project the caller owns from the given list. IDs the caller does not own — or that don't exist — are silently skipped. Returns the number of projects actually deleted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Bulk soft-delete projects",
+                "parameters": [
+                    {
+                        "description": "IDs to delete",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.BulkDeleteProjectsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Projects deleted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.BulkDeleteProjectsResponse"
                                         }
                                     }
                                 }
@@ -681,7 +888,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Permanently deletes a project and all its tasks. Only the owner can delete.",
+                "description": "Soft-deletes a project. Only the owner can delete.",
                 "produces": [
                     "application/json"
                 ],
@@ -1218,6 +1425,180 @@ const docTemplate = `{
                 }
             }
         },
+        "/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a paginated list of tasks from every project the caller is a member of.\nSupports the same filters and sorting as the project-scoped list.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "List tasks across all user's projects",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search tasks by title (case-insensitive)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status: todo, in_progress, done",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by priority: low, medium, high",
+                        "name": "priority",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by assignee UUID",
+                        "name": "assignee_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort column: status, priority, due_date, updated_at, title, created_at (default created_at)",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort direction: asc or desc (default desc)",
+                        "name": "sort_order",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page, max 100 (default 10)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tasks retrieved",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.TaskPage"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter value",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/bulk-delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes tasks the caller is authorised to remove (project owner or task creator).\nTasks in the list that don't meet the permission check are silently skipped.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Bulk-delete tasks",
+                "parameters": [
+                    {
+                        "description": "Task IDs (max 100)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.BulkDeleteTasksRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tasks deleted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.BulkDeleteTasksResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or malformed body",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
         "/tasks/{taskID}": {
             "get": {
                 "security": [
@@ -1425,7 +1806,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the task's status-transition log in reverse chronological order.\nThe caller must be a member of the task's project.",
+                "description": "Returns the task's status-transition log in reverse chronological order.\nThe caller must be a member of the task's project. Cursor pagination via\n` + "`" + `before` + "`" + `: pass the CreatedAt of the oldest entry currently rendered to\nfetch the next page. The envelope reports has_more so the UI can decide\nwhether to show \"Load more\".",
                 "produces": [
                     "application/json"
                 ],
@@ -1440,6 +1821,18 @@ const docTemplate = `{
                         "name": "taskID",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default 10, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 cursor — fetch entries created before this time",
+                        "name": "before",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1454,14 +1847,17 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.TaskActivityLog"
-                                            }
+                                            "$ref": "#/definitions/model.TaskActivityLogPage"
                                         }
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid cursor",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
                         }
                     },
                     "401": {
@@ -1648,6 +2044,392 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/tasks/{taskID}/status": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Member-allowed status-only mutation. Any project member can\ncall this endpoint; non-status fields can't be changed here\n(use PUT /tasks/{taskID} for that, which is owner-only).\nThe transition is recorded in the activity log.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Update a task's status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task UUID",
+                        "name": "taskID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New status",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.UpdateTaskStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Task status updated",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.Task"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Malformed body or invalid status",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found or caller is not a project member",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/trash": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns soft-deleted projects (owner-scoped) and soft-deleted\ntasks (project-owner or task-creator scoped, and only when the\ntask's project itself is still active) in a single feed\nordered by deleted_at descending.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "List trashed items",
+                "responses": {
+                    "200": {
+                        "description": "Trash retrieved",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.TrashItem"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes every trashed project (owner-scoped) and\nevery trashed task (project-owner or task-creator scoped) in\none shot. No body required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "Empty the trash",
+                "responses": {
+                    "200": {
+                        "description": "Trash emptied",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.BulkTrashResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/trash/purge": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes the listed projects/tasks for good. Purging a project\ncascades to its tasks via the FK.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "Permanently delete items from trash",
+                "parameters": [
+                    {
+                        "description": "IDs to purge",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.BulkTrashRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Items purged",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.BulkTrashResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/trash/restore": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Clears deleted_at on the listed projects/tasks the caller is\nallowed to restore. Items missing the right permissions or\nwhose parent project is itself trashed are silently skipped.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "Restore items from trash",
+                "parameters": [
+                    {
+                        "description": "IDs to restore",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.BulkTrashRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Items restored",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.BulkTrashResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns up to 10 users whose name or email contains the query.\nThe caller is excluded from results — invite pickers never suggest the user to themselves.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Search users",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name or email substring (min 1 char)",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Users matched",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.User"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Empty query",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing or invalid token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1744,22 +2526,85 @@ const docTemplate = `{
                 }
             }
         },
-        "model.CreateProjectRequest": {
+        "model.BulkDeleteProjectsRequest": {
             "type": "object",
             "properties": {
-                "deadline": {
-                    "type": "string",
-                    "example": "2026-12-31T23:59:59Z"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "All tasks for Q4 planning"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Q4 Roadmap"
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "c303012a-6275-4aa3-adec-ebfb123f4567",
+                        "d404123b-7386-5bb4-bcfe-fcfc234e5678"
+                    ]
                 }
             }
+        },
+        "model.BulkDeleteProjectsResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_count": {
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "model.BulkDeleteTasksRequest": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "model.BulkDeleteTasksResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.BulkTrashRequest": {
+            "type": "object",
+            "properties": {
+                "project_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "task_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "model.BulkTrashResponse": {
+            "type": "object",
+            "properties": {
+                "purged_projects": {
+                    "type": "integer"
+                },
+                "purged_tasks": {
+                    "type": "integer"
+                },
+                "restored_projects": {
+                    "type": "integer"
+                },
+                "restored_tasks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.CreateProjectRequest": {
+            "type": "object"
         },
         "model.CreateTaskRequest": {
             "type": "object",
@@ -1825,6 +2670,54 @@ const docTemplate = `{
                 }
             }
         },
+        "model.Notification": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "read_at": {
+                    "type": "string"
+                },
+                "reminder_window": {
+                    "type": "string",
+                    "example": "3d"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "task.assigned"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.NotificationPage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Notification"
+                    }
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.Project": {
             "type": "object",
             "properties": {
@@ -1874,6 +2767,23 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "string"
+                }
+            }
+        },
+        "model.ProjectMemberInvite": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.ProjectRole"
+                        }
+                    ],
+                    "example": "member"
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "c303012a-6275-4aa3-adec-ebfb123f4567"
                 }
             }
         },
@@ -1959,9 +2869,17 @@ const docTemplate = `{
         "model.Task": {
             "type": "object",
             "properties": {
+                "assignee_email": {
+                    "type": "string",
+                    "example": "jane@example.com"
+                },
                 "assignee_id": {
                     "type": "string",
                     "example": "f02c1d9c-1f73-4d3a-9b8c-aab0cf2d12cd"
+                },
+                "assignee_name": {
+                    "type": "string",
+                    "example": "Jane Doe"
                 },
                 "created_at": {
                     "type": "string",
@@ -2024,6 +2942,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "6b3a0c0e-2cc1-4f3c-8d9c-1a1b2c3d4e5f"
                 },
+                "changed_by_name": {
+                    "type": "string",
+                    "example": "Jane Doe"
+                },
                 "created_at": {
                     "type": "string",
                     "example": "2026-05-20T10:00:00Z"
@@ -2051,6 +2973,21 @@ const docTemplate = `{
                         }
                     ],
                     "example": "in_progress"
+                }
+            }
+        },
+        "model.TaskActivityLogPage": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.TaskActivityLog"
+                    }
                 }
             }
         },
@@ -2092,6 +3029,54 @@ const docTemplate = `{
                     "example": "k9F2pQ7sR1tU4vWxYz0AbCdEfGhIjKlMnOpQrStUvWx="
                 }
             }
+        },
+        "model.TrashItem": {
+            "type": "object",
+            "properties": {
+                "deleted_at": {
+                    "type": "string",
+                    "example": "2026-05-23T09:15:00Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                },
+                "kind": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.TrashKind"
+                        }
+                    ],
+                    "example": "task"
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "c303012a-6275-4aa3-adec-ebfb123f4567"
+                },
+                "project_name": {
+                    "type": "string",
+                    "example": "Auth rework"
+                },
+                "task_count": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Wire up auth middleware"
+                }
+            }
+        },
+        "model.TrashKind": {
+            "type": "string",
+            "enum": [
+                "project",
+                "task"
+            ],
+            "x-enum-varnames": [
+                "TrashKindProject",
+                "TrashKindTask"
+            ]
         },
         "model.UpcomingTask": {
             "type": "object",
@@ -2196,56 +3181,38 @@ const docTemplate = `{
                 }
             }
         },
-        "notifier.Event": {
+        "model.UpdateTaskStatusRequest": {
             "type": "object",
             "properties": {
-                "project_id": {
-                    "type": "string",
-                    "example": "c303012a-6275-4aa3-adec-ebfb123f4567"
-                },
-                "reminder_window": {
-                    "type": "string",
-                    "example": "3d"
-                },
-                "task": {
-                    "$ref": "#/definitions/model.Task"
-                },
-                "task_id": {
-                    "type": "string",
-                    "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
-                },
-                "timestamp": {
-                    "type": "string",
-                    "example": "2026-05-20T16:00:00Z"
-                },
-                "type": {
+                "status": {
                     "allOf": [
                         {
-                            "$ref": "#/definitions/notifier.EventType"
+                            "$ref": "#/definitions/model.TaskStatus"
                         }
                     ],
-                    "example": "task.created"
+                    "example": "in_progress"
                 }
             }
         },
-        "notifier.EventType": {
-            "type": "string",
-            "enum": [
-                "task.created",
-                "task.updated",
-                "task.deleted",
-                "task.assigned",
-                "task.moved",
-                "task.deadline_reminder"
-            ],
-            "x-enum-varnames": [
-                "EventTaskCreated",
-                "EventTaskUpdated",
-                "EventTaskDeleted",
-                "EventTaskAssigned",
-                "EventTaskMoved",
-                "EventTaskDeadlineReminder"
-            ]
+        "model.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
         },
         "response.Body": {
             "type": "object",

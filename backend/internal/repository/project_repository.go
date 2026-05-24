@@ -25,6 +25,9 @@ type ProjectRepository interface {
 	GetMember(ctx context.Context, projectID, userID string) (*model.ProjectMember, error)
 	GetMembers(ctx context.Context, projectID string) ([]*model.ProjectMember, error)
 	IsMember(ctx context.Context, projectID, userID string) (bool, error)
+	PendingProjectReminders(ctx context.Context, kind ReminderKind) ([]*model.Project, error)
+	MarkProjectReminderSent(ctx context.Context, projectID string, kind ReminderKind) error
+	ClearProjectReminders(ctx context.Context, projectID string) error
 }
 
 type projectRepository struct {
@@ -336,6 +339,81 @@ func (r *projectRepository) IsMember(ctx context.Context, projectID, userID stri
 		)
 	`, projectID, userID).Scan(&exists)
 	return exists, err
+}
+
+// PendingProjectReminders returns active, non-deleted projects whose deadline
+// falls inside the given window and whose matching reminder column is still
+// NULL — i.e. projects that are due soon and haven't been warned about for
+// this window yet. Mirrors TaskRepository.PendingReminders. The interval and
+// column come from the whitelisted reminderColumn switch, so no caller input
+// reaches the SQL string.
+func (r *projectRepository) PendingProjectReminders(ctx context.Context, kind ReminderKind) ([]*model.Project, error) {
+	col, interval, err := reminderColumn(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, name, description, status, deadline, owner_id, created_at, updated_at
+		FROM projects
+		WHERE deadline IS NOT NULL
+		  AND deleted_at IS NULL
+		  AND status != 'archived'
+		  AND deadline > NOW()
+		  AND deadline <= NOW() + INTERVAL '%s'
+		  AND %s IS NULL
+		ORDER BY deadline ASC
+	`, interval, col)
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("pending project reminders: %w", err)
+	}
+	defer rows.Close()
+
+	projects := make([]*model.Project, 0)
+	for rows.Next() {
+		p := &model.Project{}
+		var desc sql.NullString
+		var deadline sql.NullTime
+		if err := rows.Scan(&p.ID, &p.Name, &desc, &p.Status, &deadline, &p.OwnerID, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan pending project reminder: %w", err)
+		}
+		if desc.Valid {
+			p.Description = desc.String
+		}
+		if deadline.Valid {
+			p.Deadline = &deadline.Time
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
+}
+
+func (r *projectRepository) MarkProjectReminderSent(ctx context.Context, projectID string, kind ReminderKind) error {
+	col, _, err := reminderColumn(kind)
+	if err != nil {
+		return err
+	}
+	query := fmt.Sprintf(`UPDATE projects SET %s = NOW() WHERE id = $1`, col)
+	if _, err := r.db.ExecContext(ctx, query, projectID); err != nil {
+		return fmt.Errorf("mark project reminder sent: %w", err)
+	}
+	return nil
+}
+
+// ClearProjectReminders resets both windows so a project whose deadline moved
+// gets warned again against the new schedule.
+func (r *projectRepository) ClearProjectReminders(ctx context.Context, projectID string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE projects
+		SET reminder_3d_sent_at = NULL, reminder_1d_sent_at = NULL
+		WHERE id = $1
+	`, projectID)
+	if err != nil {
+		return fmt.Errorf("clear project reminders: %w", err)
+	}
+	return nil
 }
 
 func nullableString(s string) sql.NullString {
